@@ -2768,6 +2768,8 @@ function s1RenderEmails() {
 // ─── ORGANIGRAMA D3 ────────────────────────────────────────────────────────
 let s1OrgZoomBehavior = null;
 let S1_SEG_COL = null;
+let S1_SEG_VALUE_TO_COLOR = {}; // segmento → color (accesible para descarga)
+let S1_ANOMALY_DETAILS = [];    // lista de nodos anómalos (accesible para descarga)
 
 const S1_SEG_PALETTE = [
   '#E74C3C','#27AE60','#2980B9','#F39C12','#8E44AD',
@@ -2920,6 +2922,7 @@ function s1DrawOrg(orgResult) {
       const segKeys = [...new Set(Object.values(idToSeg))].sort();
       segKeys.forEach((seg, i) => { segValueToColor[seg] = S1_SEG_PALETTE[i % S1_SEG_PALETTE.length]; });
       Object.entries(idToSeg).forEach(([id, seg]) => { idToSegColor[id] = segValueToColor[seg]; });
+      S1_SEG_VALUE_TO_COLOR = Object.assign({}, segValueToColor); // exponer globalmente
 
       // Build legend
       segKeys.forEach(seg => {
@@ -2972,6 +2975,8 @@ function s1DrawOrg(orgResult) {
       }
     });
 
+    S1_ANOMALY_DETAILS = anomalyDetails.slice(); // exponer globalmente
+
     // Mostrar/ocultar panel y llenar tabla
     const panel = document.getElementById('s1-anomaly-panel');
     const tbody = document.getElementById('s1-anomaly-tbody');
@@ -2999,6 +3004,8 @@ function s1DrawOrg(orgResult) {
       }
     }
   } else {
+    S1_SEG_VALUE_TO_COLOR = {};
+    S1_ANOMALY_DETAILS = [];
     const panel = document.getElementById('s1-anomaly-panel');
     if (panel) panel.style.display = 'none';
   }
@@ -3126,6 +3133,17 @@ function s1DownloadOrgPDF() {
   const svgW = Math.ceil(bb.width  + pad * 2);
   const svgH = Math.ceil(bb.height + pad * 2);
 
+  // Calcular espacio extra para leyenda de segmentos
+  const segEntries = Object.entries(S1_SEG_VALUE_TO_COLOR);
+  const hasLegend  = segEntries.length > 0;
+  const SWATCH  = 18;  // tamaño del cuadro de color
+  const ROW_H   = 28;  // alto por fila de leyenda
+  const LEG_PAD = 20;  // padding interno leyenda
+  const LEG_COLS = Math.min(4, segEntries.length); // máximo 4 columnas
+  const LEG_ROWS = Math.ceil(segEntries.length / LEG_COLS);
+  const LEG_H   = hasLegend ? (LEG_PAD * 2 + 28 + LEG_ROWS * ROW_H + (S1_ANOMALY_DETAILS.length ? 40 : 0)) : 0;
+  const COL_W   = Math.max(180, Math.floor((svgW - LEG_PAD * 2) / LEG_COLS));
+
   // Clonar SVG con viewBox ajustado al contenido completo
   const clone = svgEl.cloneNode(true);
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
@@ -3144,20 +3162,77 @@ function s1DownloadOrgPDF() {
   const svgB64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
 
   const SCALE = 2;
-  const img   = new Image();
+  const totalH = svgH + LEG_H;
+  const img = new Image();
+
+  // Función para dibujar la leyenda en el canvas
+  function drawLegend(ctx, offsetY) {
+    if (!hasLegend) return;
+
+    // Fondo de leyenda
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, offsetY, svgW, LEG_H);
+
+    // Línea separadora
+    ctx.strokeStyle = '#D8D4CC';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, offsetY);
+    ctx.lineTo(svgW, offsetY);
+    ctx.stroke();
+
+    // Título de la leyenda
+    const segColLabel = S1_SEG_COL || 'Segmentación';
+    ctx.fillStyle = '#1A2B4A';
+    ctx.font = 'bold 13px Arial, sans-serif';
+    ctx.fillText('Clasificación: ' + segColLabel, LEG_PAD, offsetY + LEG_PAD + 14);
+
+    // Items de leyenda en columnas
+    segEntries.forEach(([seg, color], i) => {
+      const col = i % LEG_COLS;
+      const row = Math.floor(i / LEG_COLS);
+      const x = LEG_PAD + col * COL_W;
+      const y = offsetY + LEG_PAD + 28 + row * ROW_H;
+
+      // Cuadro de color
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.roundRect(x, y + 1, SWATCH, SWATCH, 3);
+      ctx.fill();
+
+      // Nombre del segmento
+      ctx.fillStyle = '#1A2B4A';
+      ctx.font = '12px Arial, sans-serif';
+      const label = seg.length > 30 ? seg.substring(0, 29) + '…' : seg;
+      ctx.fillText(label, x + SWATCH + 8, y + SWATCH / 2 + 5);
+    });
+
+    // Nota sobre nodos anómalos (si los hay)
+    if (S1_ANOMALY_DETAILS.length) {
+      const noteY = offsetY + LEG_PAD + 28 + LEG_ROWS * ROW_H + 12;
+      ctx.strokeStyle = '#FF8C00';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(LEG_PAD - 2, noteY - 14, svgW - LEG_PAD * 2 + 4, 24);
+      ctx.fillStyle = '#CC6600';
+      ctx.font = '11px Arial, sans-serif';
+      const anomIds = S1_ANOMALY_DETAILS.slice(0, 5).map(x => x.id).join(', ');
+      const suffix = S1_ANOMALY_DETAILS.length > 5 ? ` y ${S1_ANOMALY_DETAILS.length - 5} más` : '';
+      ctx.fillText(`⚠ Personas con segmento diferente a sus vecinos en el árbol: ${anomIds}${suffix}`, LEG_PAD + 4, noteY + 2);
+    }
+  }
 
   img.onload = () => {
     try {
       const canvas = document.createElement('canvas');
       canvas.width  = svgW * SCALE;
-      canvas.height = svgH * SCALE;
+      canvas.height = totalH * SCALE;
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#F9F8F5';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.scale(SCALE, SCALE);
       ctx.drawImage(img, 0, 0, svgW, svgH);
+      drawLegend(ctx, svgH);
 
-      // Descargar como PNG directamente (sin dependencias externas)
       canvas.toBlob(blob => {
         const url  = URL.createObjectURL(blob);
         const link = document.createElement('a');
