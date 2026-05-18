@@ -3148,7 +3148,7 @@ function s1DownloadOrgPDF() {
   const svgW = Math.ceil(bb.width  + pad * 2);
   const svgH = Math.ceil(bb.height + pad * 2);
 
-  // Leyenda compacta: recuadro en esquina inferior izquierda (superpuesto)
+  // Layout: panel de leyenda a la IZQUIERDA, organigrama a la DERECHA, misma altura
   const segEntries = Object.entries(S1_SEG_VALUE_TO_COLOR);
   const hasLegend  = segEntries.length > 0;
 
@@ -3167,79 +3167,88 @@ function s1DownloadOrgPDF() {
     ctx.closePath();
   }
 
-  // Medidas del recuadro de leyenda (franja debajo del árbol, sin solapar)
-  const SWATCH   = 12;
-  const ROW_H    = 20;
-  const IPAD     = 12; // padding interno del recuadro
-  const maxLabel = 28; // chars máx por etiqueta
-  const BOX_W    = 200;
-  const BOX_H    = hasLegend ? (IPAD * 2 + 18 + segEntries.length * ROW_H + (S1_ANOMALY_DETAILS.length ? 22 : 0)) : 0;
-  const STRIP_H  = hasLegend ? BOX_H + 24 : 0; // altura total de la franja inferior
-  const MARGIN   = 12;
+  // Medidas del panel lateral de leyenda
+  const SWATCH  = 13;
+  const ROW_H   = 22;
+  const IPAD    = 14;
+  const FONT_PX = 11; // px para medir texto aproximado
+  // Calcular ancho necesario para el label más largo (aprox 7px por char + icono + padding)
+  const longestLabel = segEntries.reduce((mx, [seg]) => Math.max(mx, seg.length), 0);
+  const LEG_W   = hasLegend ? Math.max(160, Math.min(280, IPAD * 2 + SWATCH + 8 + longestLabel * 7)) : 0;
+  const LEG_H_content = hasLegend
+    ? (IPAD * 2 + 20 + segEntries.length * ROW_H + (S1_ANOMALY_DETAILS.length ? 28 : 0))
+    : 0;
 
-  // Función para dibujar la leyenda en la franja inferior izquierda
-  function drawLegend(ctx, canvasW, orgH) {
+  // Panel lateral: fondo gris claro del mismo alto que el árbol
+  function drawLegendPanel(ctx, orgW, orgH) {
     if (!hasLegend) return;
-    const bx = MARGIN;
-    const by = orgH + 12; // 12px de margen superior dentro de la franja
 
-    // Fondo blanco de la franja completa
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, orgH, canvasW, STRIP_H);
+    // Fondo del panel lateral
+    ctx.fillStyle = '#F0EDE8';
+    ctx.fillRect(0, 0, LEG_W, orgH);
 
-    // Línea separadora sutil
-    ctx.strokeStyle = '#D8D4CC';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(0, orgH);
-    ctx.lineTo(canvasW, orgH);
-    ctx.stroke();
-
-    // Recuadro de la leyenda
-    ctx.fillStyle = '#F4F2EE';
-    ctxRoundRect(ctx, bx, by, BOX_W, BOX_H, 6);
-    ctx.fill();
+    // Línea separadora vertical
     ctx.strokeStyle = '#C8C4BC';
-    ctx.lineWidth = 0.8;
-    ctxRoundRect(ctx, bx, by, BOX_W, BOX_H, 6);
-    ctx.stroke();
-
-    // Título
-    const title = (S1_SEG_COL || 'Segmentación').length > maxLabel
-      ? (S1_SEG_COL || 'Segmentación').substring(0, maxLabel - 1) + '…'
-      : (S1_SEG_COL || 'Segmentación');
-    ctx.fillStyle = '#1A2B4A';
-    ctx.font = 'bold 11px Arial, sans-serif';
-    ctx.fillText(title, bx + IPAD, by + IPAD + 9);
-
-    // Línea separadora interna
-    ctx.strokeStyle = '#D8D4CC';
-    ctx.lineWidth = 0.6;
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(bx + IPAD, by + IPAD + 15);
-    ctx.lineTo(bx + BOX_W - IPAD, by + IPAD + 15);
+    ctx.moveTo(LEG_W, 0);
+    ctx.lineTo(LEG_W, orgH);
     ctx.stroke();
 
-    // Items de leyenda
-    segEntries.forEach(([seg, color], i) => {
-      const iy = by + IPAD + 18 + i * ROW_H;
+    // Posición vertical centrada del bloque de leyenda
+    const by = Math.max(IPAD, (orgH - LEG_H_content) / 2);
 
+    // Título de clasificación
+    const titleRaw = S1_SEG_COL || 'Segmentación';
+    ctx.fillStyle = '#1A2B4A';
+    ctx.font = `bold ${FONT_PX + 1}px Arial, sans-serif`;
+    // Ajustar título al ancho disponible
+    let title = titleRaw;
+    while (title.length > 6 && ctx.measureText(title).width > LEG_W - IPAD * 2) {
+      title = title.slice(0, -1);
+    }
+    if (title !== titleRaw) title = title.slice(0, -1) + '…';
+    ctx.fillText(title, IPAD, by + FONT_PX + 2);
+
+    // Línea separadora bajo el título
+    ctx.strokeStyle = '#C8C4BC';
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(IPAD, by + FONT_PX + 8);
+    ctx.lineTo(LEG_W - IPAD, by + FONT_PX + 8);
+    ctx.stroke();
+
+    // Items de segmento — nombre completo, sin cortar
+    segEntries.forEach(([seg, color], i) => {
+      const iy = by + FONT_PX + 14 + i * ROW_H;
+
+      // Cuadro de color
       ctx.fillStyle = color;
-      ctxRoundRect(ctx, bx + IPAD, iy + 2, SWATCH, SWATCH, 2);
+      ctxRoundRect(ctx, IPAD, iy + 3, SWATCH, SWATCH, 3);
       ctx.fill();
 
-      ctx.fillStyle = '#2C2C2C';
-      ctx.font = '10px Arial, sans-serif';
-      const label = seg.length > maxLabel ? seg.substring(0, maxLabel - 1) + '…' : seg;
-      ctx.fillText(label, bx + IPAD + SWATCH + 7, iy + SWATCH / 2 + 5);
+      // Nombre completo del segmento — wrap si es muy largo
+      ctx.fillStyle = '#1A2B4A';
+      ctx.font = `${FONT_PX}px Arial, sans-serif`;
+      const maxW = LEG_W - IPAD * 2 - SWATCH - 8;
+      let label = seg;
+      // Truncar solo si absolutamente no cabe en una línea
+      while (label.length > 4 && ctx.measureText(label).width > maxW) {
+        label = label.slice(0, -1);
+      }
+      if (label !== seg) label = label.slice(0, -1) + '…';
+      ctx.fillText(label, IPAD + SWATCH + 8, iy + SWATCH / 2 + 4 + 3);
     });
 
-    // Nota anómalos
+    // Nota sobre nodos anómalos
     if (S1_ANOMALY_DETAILS.length) {
-      const ny = by + IPAD + 18 + segEntries.length * ROW_H + 4;
+      const ny = by + FONT_PX + 14 + segEntries.length * ROW_H + 6;
       ctx.fillStyle = '#CC6600';
-      ctx.font = '9px Arial, sans-serif';
-      ctx.fillText(`⚠ ${S1_ANOMALY_DETAILS.length} persona(s) con segmento diferente a sus vecinos`, bx + IPAD, ny + 9);
+      ctx.font = `bold 9px Arial, sans-serif`;
+      ctx.fillText(`⚠ ${S1_ANOMALY_DETAILS.length} aislado(s)`, IPAD, ny + 10);
+      ctx.font = `9px Arial, sans-serif`;
+      ctx.fillStyle = '#888';
+      ctx.fillText('(segmento ≠ vecinos)', IPAD, ny + 22);
     }
   }
 
@@ -3260,21 +3269,22 @@ function s1DownloadOrgPDF() {
   const svgStr = new XMLSerializer().serializeToString(clone);
   const svgB64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
 
-  const SCALE = 2;
-  const totalH = svgH + STRIP_H;
+  const SCALE  = 2;
+  const totalW = LEG_W + svgW; // panel + organigrama
   const img = new Image();
 
   img.onload = () => {
     try {
       const canvas = document.createElement('canvas');
-      canvas.width  = svgW * SCALE;
-      canvas.height = totalH * SCALE;
+      canvas.width  = totalW * SCALE;
+      canvas.height = svgH * SCALE;
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#F9F8F5';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.scale(SCALE, SCALE);
-      ctx.drawImage(img, 0, 0, svgW, svgH);
-      drawLegend(ctx, svgW, svgH);
+      // Organigrama desplazado a la derecha del panel
+      ctx.drawImage(img, LEG_W, 0, svgW, svgH);
+      drawLegendPanel(ctx, svgW, svgH);
 
       canvas.toBlob(blob => {
         const url  = URL.createObjectURL(blob);
