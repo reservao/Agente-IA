@@ -2767,6 +2767,7 @@ function s1RenderEmails() {
 
 // ─── ORGANIGRAMA D3 ────────────────────────────────────────────────────────
 let s1OrgZoomBehavior = null;
+let s1OrgInitTransform = null;
 let S1_SEG_COL = null;
 let S1_SEG_VALUE_TO_COLOR = {}; // segmento → color (accesible para descarga)
 let S1_ANOMALY_DETAILS = [];    // lista de nodos anómalos (accesible para descarga)
@@ -2878,7 +2879,12 @@ function s1DrawOrg(orgResult) {
 
   // Calcular bounds reales (excluyendo nodo virtual)
   const visNodes = root.descendants().filter(d => !d.data.isVirtual);
-  if (!visNodes.length) return;
+  if (!visNodes.length) {
+    svg.append('text').attr('x', (W || 800) / 2).attr('y', 100)
+      .attr('text-anchor', 'middle').attr('fill', '#888').attr('font-size', 14)
+      .text('Sin datos para mostrar en el árbol');
+    return;
+  }
 
   const xs = visNodes.map(d => d.x);
   const ys = visNodes.map(d => d.y);
@@ -2898,8 +2904,8 @@ function s1DrawOrg(orgResult) {
     .scaleExtent([0.03, 4])
     .on('zoom', ev => g.attr('transform', ev.transform));
   svg.call(s1OrgZoomBehavior);
-  svg.call(s1OrgZoomBehavior.transform,
-    d3.zoomIdentity.translate(initTx, initTy).scale(initScale));
+  s1OrgInitTransform = d3.zoomIdentity.translate(initTx, initTy).scale(initScale);
+  svg.call(s1OrgZoomBehavior.transform, s1OrgInitTransform);
 
   // ── Segmentación overlay (convex hull por grupo) ─────────────────────────
   const legendEl = document.getElementById('s1-seg-legend');
@@ -3108,8 +3114,17 @@ function s1OrgReset() {
   const svg = d3.select('#s1org-svg');
   const g = document.getElementById('s1org-g');
   if (!g) return;
-  const bb = g.getBBox();
-  const scale = Math.min(1, (W - 40) / (bb.width || 1), 500 / (bb.height || 1));
+  let bb;
+  try { bb = g.getBBox(); } catch(e) { bb = null; }
+  if (!bb || !bb.width || !bb.height) {
+    // Fallback: restaurar la vista inicial guardada al renderizar
+    if (s1OrgInitTransform) {
+      svg.transition().duration(400)
+        .call(s1OrgZoomBehavior.transform, s1OrgInitTransform);
+    }
+    return;
+  }
+  const scale = Math.min(1, (W - 40) / bb.width, 500 / bb.height);
   const tx = (W - bb.width * scale) / 2 - bb.x * scale;
   svg.transition().duration(400)
     .call(s1OrgZoomBehavior.transform, d3.zoomIdentity.translate(tx, 30).scale(scale));
@@ -3133,16 +3148,97 @@ function s1DownloadOrgPDF() {
   const svgW = Math.ceil(bb.width  + pad * 2);
   const svgH = Math.ceil(bb.height + pad * 2);
 
-  // Calcular espacio extra para leyenda de segmentos
+  // Leyenda compacta: recuadro en esquina inferior izquierda (superpuesto)
   const segEntries = Object.entries(S1_SEG_VALUE_TO_COLOR);
   const hasLegend  = segEntries.length > 0;
-  const SWATCH  = 18;  // tamaño del cuadro de color
-  const ROW_H   = 28;  // alto por fila de leyenda
-  const LEG_PAD = 20;  // padding interno leyenda
-  const LEG_COLS = Math.min(4, segEntries.length); // máximo 4 columnas
-  const LEG_ROWS = Math.ceil(segEntries.length / LEG_COLS);
-  const LEG_H   = hasLegend ? (LEG_PAD * 2 + 28 + LEG_ROWS * ROW_H + (S1_ANOMALY_DETAILS.length ? 40 : 0)) : 0;
-  const COL_W   = Math.max(180, Math.floor((svgW - LEG_PAD * 2) / LEG_COLS));
+
+  // Polyfill roundRect para Safari/Firefox antiguos
+  function ctxRoundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  // Medidas del recuadro de leyenda
+  const SWATCH   = 11;
+  const ROW_H    = 18;
+  const IPAD     = 10; // padding interno
+  const maxLabel = 22; // chars máx por etiqueta
+  const BOX_W    = 170;
+  const BOX_H    = hasLegend ? (IPAD * 2 + 16 + segEntries.length * ROW_H + (S1_ANOMALY_DETAILS.length ? 20 : 0)) : 0;
+  const MARGIN   = 16; // margen desde el borde del PNG
+
+  // Función para dibujar la leyenda como overlay en esquina inferior izquierda
+  function drawLegend(ctx, canvasW, canvasH) {
+    if (!hasLegend) return;
+    const bx = MARGIN;
+    const by = canvasH - BOX_H - MARGIN;
+
+    // Sombra suave
+    ctx.shadowColor = 'rgba(0,0,0,0.18)';
+    ctx.shadowBlur  = 8;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+
+    // Fondo blanco con borde
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctxRoundRect(ctx, bx, by, BOX_W, BOX_H, 6);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur  = 0;
+    ctx.strokeStyle = '#C8C4BC';
+    ctx.lineWidth   = 0.8;
+    ctxRoundRect(ctx, bx, by, BOX_W, BOX_H, 6);
+    ctx.stroke();
+
+    // Título
+    const title = (S1_SEG_COL || 'Segmentación').length > maxLabel
+      ? (S1_SEG_COL || 'Segmentación').substring(0, maxLabel - 1) + '…'
+      : (S1_SEG_COL || 'Segmentación');
+    ctx.fillStyle = '#1A2B4A';
+    ctx.font = 'bold 10px Arial, sans-serif';
+    ctx.fillText(title, bx + IPAD, by + IPAD + 9);
+
+    // Línea separadora
+    ctx.strokeStyle = '#E0DDD8';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(bx + IPAD, by + IPAD + 14);
+    ctx.lineTo(bx + BOX_W - IPAD, by + IPAD + 14);
+    ctx.stroke();
+
+    // Items
+    segEntries.forEach(([seg, color], i) => {
+      const iy = by + IPAD + 16 + i * ROW_H + 2;
+
+      // Cuadro de color
+      ctx.fillStyle = color;
+      ctxRoundRect(ctx, bx + IPAD, iy, SWATCH, SWATCH, 2);
+      ctx.fill();
+
+      // Etiqueta
+      ctx.fillStyle = '#2C2C2C';
+      ctx.font = '9px Arial, sans-serif';
+      const label = seg.length > maxLabel ? seg.substring(0, maxLabel - 1) + '…' : seg;
+      ctx.fillText(label, bx + IPAD + SWATCH + 6, iy + SWATCH / 2 + 3);
+    });
+
+    // Nota anómalos
+    if (S1_ANOMALY_DETAILS.length) {
+      const ny = by + IPAD + 16 + segEntries.length * ROW_H + 4;
+      ctx.fillStyle = '#CC6600';
+      ctx.font = '8px Arial, sans-serif';
+      ctx.fillText(`⚠ ${S1_ANOMALY_DETAILS.length} persona(s) aislada(s)`, bx + IPAD, ny + 9);
+    }
+  }
 
   // Clonar SVG con viewBox ajustado al contenido completo
   const clone = svgEl.cloneNode(true);
@@ -3162,76 +3258,19 @@ function s1DownloadOrgPDF() {
   const svgB64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
 
   const SCALE = 2;
-  const totalH = svgH + LEG_H;
   const img = new Image();
-
-  // Función para dibujar la leyenda en el canvas
-  function drawLegend(ctx, offsetY) {
-    if (!hasLegend) return;
-
-    // Fondo de leyenda
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, offsetY, svgW, LEG_H);
-
-    // Línea separadora
-    ctx.strokeStyle = '#D8D4CC';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, offsetY);
-    ctx.lineTo(svgW, offsetY);
-    ctx.stroke();
-
-    // Título de la leyenda
-    const segColLabel = S1_SEG_COL || 'Segmentación';
-    ctx.fillStyle = '#1A2B4A';
-    ctx.font = 'bold 13px Arial, sans-serif';
-    ctx.fillText('Clasificación: ' + segColLabel, LEG_PAD, offsetY + LEG_PAD + 14);
-
-    // Items de leyenda en columnas
-    segEntries.forEach(([seg, color], i) => {
-      const col = i % LEG_COLS;
-      const row = Math.floor(i / LEG_COLS);
-      const x = LEG_PAD + col * COL_W;
-      const y = offsetY + LEG_PAD + 28 + row * ROW_H;
-
-      // Cuadro de color
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.roundRect(x, y + 1, SWATCH, SWATCH, 3);
-      ctx.fill();
-
-      // Nombre del segmento
-      ctx.fillStyle = '#1A2B4A';
-      ctx.font = '12px Arial, sans-serif';
-      const label = seg.length > 30 ? seg.substring(0, 29) + '…' : seg;
-      ctx.fillText(label, x + SWATCH + 8, y + SWATCH / 2 + 5);
-    });
-
-    // Nota sobre nodos anómalos (si los hay)
-    if (S1_ANOMALY_DETAILS.length) {
-      const noteY = offsetY + LEG_PAD + 28 + LEG_ROWS * ROW_H + 12;
-      ctx.strokeStyle = '#FF8C00';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(LEG_PAD - 2, noteY - 14, svgW - LEG_PAD * 2 + 4, 24);
-      ctx.fillStyle = '#CC6600';
-      ctx.font = '11px Arial, sans-serif';
-      const anomIds = S1_ANOMALY_DETAILS.slice(0, 5).map(x => x.id).join(', ');
-      const suffix = S1_ANOMALY_DETAILS.length > 5 ? ` y ${S1_ANOMALY_DETAILS.length - 5} más` : '';
-      ctx.fillText(`⚠ Personas con segmento diferente a sus vecinos en el árbol: ${anomIds}${suffix}`, LEG_PAD + 4, noteY + 2);
-    }
-  }
 
   img.onload = () => {
     try {
       const canvas = document.createElement('canvas');
       canvas.width  = svgW * SCALE;
-      canvas.height = totalH * SCALE;
+      canvas.height = svgH * SCALE;
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#F9F8F5';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.scale(SCALE, SCALE);
       ctx.drawImage(img, 0, 0, svgW, svgH);
-      drawLegend(ctx, svgH);
+      drawLegend(ctx, svgW, svgH);
 
       canvas.toBlob(blob => {
         const url  = URL.createObjectURL(blob);
