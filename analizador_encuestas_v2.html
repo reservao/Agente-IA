@@ -2863,8 +2863,22 @@ function s1DrawOrg(orgResult) {
 
   const W = document.getElementById('s1org-container').offsetWidth || 800;
   const H = 560;
-  const NODE_W = 140, NODE_H = 38, NODE_RX = 7;
-  const V_GAP = 80, H_GAP = 16;
+  // Altura extra cuando hay nombres disponibles
+  const nameColName = (S1.colMap && S1.colMap['s1nombre']) || '';
+  const nameIdx = nameColName ? S1.headers.indexOf(nameColName) : -1;
+  const idColNameOrg = (S1.colMap && S1.colMap['s1id']) || '';
+  const idIdxOrg = idColNameOrg ? S1.headers.indexOf(idColNameOrg) : -1;
+  const idToName = {};
+  if (nameIdx >= 0 && idIdxOrg >= 0 && S1.rows) {
+    S1.rows.forEach(row => {
+      const id   = String(row[idIdxOrg] || '').trim();
+      const name = String(row[nameIdx]  || '').trim();
+      if (id && name) idToName[id] = name;
+    });
+  }
+  const HAS_NAMES = Object.keys(idToName).length > 0;
+  const NODE_W = 140, NODE_H = HAS_NAMES ? 54 : 38, NODE_RX = 7;
+  const V_GAP = HAS_NAMES ? 90 : 80, H_GAP = 16;
 
   // Filtrar nodo virtual de los datos para el layout pero mantenerlo oculto
   const root = d3.hierarchy(orgResult.treeData);
@@ -3076,13 +3090,31 @@ function s1DrawOrg(orgResult) {
     .attr('font-size', 10)
     .text('⚠');
 
+  // Línea 1: RUT / ID
   node.append('text')
-    .attr('x', NODE_W/2).attr('y', NODE_H/2)
+    .attr('x', NODE_W/2)
+    .attr('y', HAS_NAMES ? NODE_H/2 - 8 : NODE_H/2)
     .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
     .attr('fill', 'white')
     .attr('font-size', 11).attr('font-family', 'DM Sans, Arial, sans-serif')
     .attr('font-weight', d => d.data.isRoot ? '600' : '400')
     .text(d => d.data.id.length > 19 ? d.data.id.substring(0, 18) + '…' : d.data.id);
+
+  // Línea 2: (Nombre Apellido) — solo si hay datos de nombre
+  if (HAS_NAMES) {
+    node.append('text')
+      .attr('x', NODE_W/2).attr('y', NODE_H/2 + 10)
+      .attr('text-anchor', 'middle').attr('dominant-baseline', 'middle')
+      .attr('fill', 'rgba(255,255,255,0.82)')
+      .attr('font-size', 9).attr('font-family', 'DM Sans, Arial, sans-serif')
+      .attr('font-style', 'italic')
+      .text(d => {
+        const name = idToName[d.data.id] || '';
+        if (!name) return '';
+        const display = name.length > 22 ? name.substring(0, 21) + '…' : name;
+        return `(${display})`;
+      });
+  }
 
   // Tooltip
   node.append('title').text(d => {
