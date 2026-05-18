@@ -547,6 +547,14 @@ tr:hover td { background: var(--bg); }
             <button class="btn btn-secondary btn-sm" onclick="s1OrgReset()">⊙ Restablecer vista</button>
             <span id="s1p4-node-count" style="font-size:12px;color:var(--text2);margin-left:auto"></span>
           </div>
+          <!-- Segmentación overlay -->
+          <div style="display:flex;gap:8px;padding:.5rem 1rem;border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap;background:var(--bg)">
+            <span style="font-size:12px;font-weight:600;color:var(--text2);white-space:nowrap">🎨 Ver segmentación:</span>
+            <select id="s1-seg-select" onchange="s1SetSegOverlay()" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);min-width:160px;max-width:260px">
+              <option value="">— Sin segmentación —</option>
+            </select>
+            <div id="s1-seg-legend" style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;align-items:center"></div>
+          </div>
           <!-- SVG container -->
           <div id="s1org-container" style="width:100%;height:560px;overflow:hidden;background:#F9F8F5;position:relative">
             <svg id="s1org-svg" style="width:100%;height:100%"></svg>
@@ -2730,6 +2738,39 @@ function s1RenderEmails() {
 
 // ─── ORGANIGRAMA D3 ────────────────────────────────────────────────────────
 let s1OrgZoomBehavior = null;
+let S1_SEG_COL = null;
+
+const S1_SEG_PALETTE = [
+  '#E74C3C','#27AE60','#2980B9','#F39C12','#8E44AD',
+  '#16A085','#D35400','#C0392B','#1ABC9C','#2C3E50','#E91E63','#7F8C8D'
+];
+
+function s1PopulateSegSelector() {
+  const sel = document.getElementById('s1-seg-select');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— Sin segmentación —</option>';
+  if (!S1.headers || !S1.rows || !S1.rows.length) return;
+  const idColName  = (S1.colMap && S1.colMap['s1id'])  || '';
+  const jefColName = (S1.colMap && S1.colMap['s1jef']) || '';
+  S1.headers.forEach((h, idx) => {
+    if (h === idColName || h === jefColName) return;
+    const vals = new Set(S1.rows.map(r => String(r[idx]||'').trim()).filter(Boolean));
+    if (vals.size >= 2 && vals.size <= 30) {
+      const opt = document.createElement('option');
+      opt.value = h;
+      opt.textContent = h + ' (' + vals.size + ' grupos)';
+      if (h === prev) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  });
+}
+
+function s1SetSegOverlay() {
+  const sel = document.getElementById('s1-seg-select');
+  S1_SEG_COL = sel ? sel.value : '';
+  if (S1.orgResult) s1DrawOrg(S1.orgResult);
+}
 
 function s1BuildTree(rows, idIdx, jefIdx, idSet, noMatchSet, selfCycleIds) {
   // Construir mapa de hijos y jefatura real de cada ID
@@ -2829,6 +2870,94 @@ function s1DrawOrg(orgResult) {
   svg.call(s1OrgZoomBehavior.transform,
     d3.zoomIdentity.translate(initTx, initTy).scale(initScale));
 
+  // ── Segmentación overlay (convex hull por grupo) ─────────────────────────
+  const legendEl = document.getElementById('s1-seg-legend');
+  if (legendEl) legendEl.innerHTML = '';
+  if (S1_SEG_COL && S1.headers && S1.rows) {
+    const segIdx   = S1.headers.indexOf(S1_SEG_COL);
+    const idColName = (S1.colMap && S1.colMap['s1id']) || '';
+    const idIdx    = idColName ? S1.headers.indexOf(idColName) : -1;
+    if (segIdx >= 0 && idIdx >= 0) {
+      const idToSeg = {};
+      S1.rows.forEach(row => {
+        const id  = String(row[idIdx]  || '').trim();
+        const seg = String(row[segIdx] || '').trim();
+        if (id && seg) idToSeg[id] = seg;
+      });
+      const PAD = NODE_W / 2 + 24;
+      const VPAD = NODE_H / 2 + 24;
+      const segGroups = {};
+      visNodes.forEach(d => {
+        const seg = idToSeg[d.data.id];
+        if (!seg) return;
+        if (!segGroups[seg]) segGroups[seg] = [];
+        // Use node corners + mid-edge points for a better hull
+        const nx = d.x, ny = d.y;
+        segGroups[seg].push(
+          [nx - PAD, ny - VPAD], [nx + PAD, ny - VPAD],
+          [nx + PAD, ny + VPAD], [nx - PAD, ny + VPAD],
+          [nx,       ny - VPAD], [nx,       ny + VPAD],
+          [nx - PAD, ny],        [nx + PAD, ny]
+        );
+      });
+      const segKeys = Object.keys(segGroups).sort();
+      const hullG = g.append('g').attr('class', 'seg-hull-layer');
+      hullG.lower();
+      const lineGen = d3.line().curve(d3.curveCatmullRomClosed.alpha(0.5));
+      segKeys.forEach((seg, i) => {
+        const pts   = segGroups[seg];
+        const hull  = d3.polygonHull(pts);
+        if (!hull || hull.length < 3) return;
+        const color = S1_SEG_PALETTE[i % S1_SEG_PALETTE.length];
+        const cx    = d3.mean(hull, p => p[0]);
+        const cy    = d3.mean(hull, p => p[1]);
+        // Expand hull slightly outward from centroid
+        const expanded = hull.map(p => {
+          const dx = p[0] - cx, dy = p[1] - cy;
+          const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+          return [p[0] + dx/dist * 10, p[1] + dy/dist * 10];
+        });
+        hullG.append('path')
+          .attr('d', lineGen(expanded))
+          .attr('fill', color + '1A')
+          .attr('stroke', color)
+          .attr('stroke-width', 2.5)
+          .attr('stroke-linejoin', 'round');
+        // Label badge at top of hull
+        const topY = Math.min(...expanded.map(p => p[1]));
+        const labelText = seg.length > 24 ? seg.substring(0,23) + '…' : seg;
+        const lG = hullG.append('g');
+        const lTxt = lG.append('text')
+          .attr('x', cx).attr('y', topY - 7)
+          .attr('text-anchor', 'middle').attr('dominant-baseline', 'auto')
+          .attr('font-size', 12).attr('font-weight', '700')
+          .attr('font-family', 'DM Sans, Arial, sans-serif')
+          .attr('fill', 'white')
+          .text(labelText);
+        try {
+          const bb = lTxt.node().getBBox();
+          lG.insert('rect','text')
+            .attr('x', bb.x - 5).attr('y', bb.y - 3)
+            .attr('width', bb.width + 10).attr('height', bb.height + 6)
+            .attr('rx', 4).attr('fill', color).attr('opacity', 0.92);
+        } catch(e) {
+          lG.insert('rect','text')
+            .attr('x', cx - 40).attr('y', topY - 22)
+            .attr('width', 80).attr('height', 18)
+            .attr('rx', 4).attr('fill', color).attr('opacity', 0.92);
+        }
+        // Legend item
+        if (legendEl) {
+          const item = document.createElement('span');
+          item.style.cssText = 'display:flex;align-items:center;gap:4px';
+          item.innerHTML = `<span style="width:10px;height:10px;border-radius:2px;background:${color};flex-shrink:0;display:inline-block"></span><span>${seg}</span>`;
+          legendEl.appendChild(item);
+        }
+      });
+    }
+  }
+  // ── Fin segmentación overlay ──────────────────────────────────────────────
+
   // Aristas: elbow connector (líneas en ángulo recto, más legible)
   const links = root.links().filter(l => !l.source.data.isVirtual);
   g.selectAll('.org-link')
@@ -2878,6 +3007,9 @@ function s1DrawOrg(orgResult) {
 
   document.getElementById('s1p4-node-count').textContent =
     visNodes.length + ' personas en el árbol';
+
+  // Populate segmentation selector with available columns
+  s1PopulateSegSelector();
 }
 
 function s1OrgZoom(factor) {
