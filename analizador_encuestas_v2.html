@@ -380,6 +380,12 @@ tr:hover td { background: var(--bg); }
   .section-nav { padding: 0 1rem; }
   .sec-btn { padding: .6rem 1rem; font-size: 12px; }
 }
+@keyframes anomaly-dash {
+  to { stroke-dashoffset: -16; }
+}
+#s1org-svg rect.anomaly-ring {
+  animation: anomaly-dash 1.2s linear infinite;
+}
 </style>
 </head>
 <body>
@@ -558,6 +564,29 @@ tr:hover td { background: var(--bg); }
           <!-- SVG container -->
           <div id="s1org-container" style="width:100%;height:560px;overflow:hidden;background:#F9F8F5;position:relative">
             <svg id="s1org-svg" style="width:100%;height:100%"></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel de nodos anómalos por segmentación -->
+      <div id="s1-anomaly-panel" style="display:none;margin-top:1.25rem">
+        <div class="slbl">⚠ Personas aisladas en segmentación</div>
+        <div class="card" style="padding:1rem">
+          <p style="font-size:12px;color:var(--text2);margin:0 0 .75rem">
+            Estas personas pertenecen a un segmento distinto al de la mayoría de sus vecinos directos en el árbol (jefatura y/o subordinados). Aparecen marcadas con borde naranja en el organigrama.
+          </p>
+          <div style="overflow-x:auto">
+            <table class="det-table" style="width:100%">
+              <thead>
+                <tr>
+                  <th>ID / RUT</th>
+                  <th>Segmento propio</th>
+                  <th>Segmento predominante de vecinos</th>
+                  <th>Vecinos totales</th>
+                </tr>
+              </thead>
+              <tbody id="s1-anomaly-tbody"></tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -2892,82 +2921,88 @@ function s1DrawOrg(orgResult) {
       segKeys.forEach((seg, i) => { segValueToColor[seg] = S1_SEG_PALETTE[i % S1_SEG_PALETTE.length]; });
       Object.entries(idToSeg).forEach(([id, seg]) => { idToSegColor[id] = segValueToColor[seg]; });
 
-      // Draw hulls
-      const PAD = NODE_W / 2 + 24;
-      const VPAD = NODE_H / 2 + 24;
-      const segGroups = {};
-      visNodes.forEach(d => {
-        const seg = idToSeg[d.data.id];
-        if (!seg) return;
-        if (!segGroups[seg]) segGroups[seg] = [];
-        const nx = d.x, ny = d.y;
-        segGroups[seg].push(
-          [nx - PAD, ny - VPAD], [nx + PAD, ny - VPAD],
-          [nx + PAD, ny + VPAD], [nx - PAD, ny + VPAD],
-          [nx,       ny - VPAD], [nx,       ny + VPAD],
-          [nx - PAD, ny],        [nx + PAD, ny]
-        );
-      });
-
-      // Sort by hull area descending so smaller groups render on top
-      const hullEntries = segKeys.map(seg => {
-        const pts  = segGroups[seg] || [];
-        const hull = pts.length ? d3.polygonHull(pts) : null;
-        const area = hull ? Math.abs(d3.polygonArea(hull)) : 0;
-        return { seg, hull, area, color: segValueToColor[seg] };
-      }).filter(e => e.hull && e.hull.length >= 3)
-        .sort((a, b) => b.area - a.area);
-
-      const hullG = g.append('g').attr('class', 'seg-hull-layer');
-      hullG.lower();
-      const lineGen = d3.line().curve(d3.curveCatmullRomClosed.alpha(0.5));
-
-      hullEntries.forEach(({ seg, hull, color }) => {
-        const cx = d3.mean(hull, p => p[0]);
-        const cy = d3.mean(hull, p => p[1]);
-        const expanded = hull.map(p => {
-          const dx = p[0] - cx, dy = p[1] - cy;
-          const dist = Math.sqrt(dx*dx + dy*dy) || 1;
-          return [p[0] + dx/dist * 10, p[1] + dy/dist * 10];
-        });
-        hullG.append('path')
-          .attr('d', lineGen(expanded))
-          .attr('fill', color + '12')
-          .attr('stroke', color)
-          .attr('stroke-width', 2.5)
-          .attr('stroke-linejoin', 'round');
-        const topY = Math.min(...expanded.map(p => p[1]));
-        const labelText = seg.length > 24 ? seg.substring(0,23) + '…' : seg;
-        const lG = hullG.append('g');
-        const lTxt = lG.append('text')
-          .attr('x', cx).attr('y', topY - 7)
-          .attr('text-anchor', 'middle').attr('dominant-baseline', 'auto')
-          .attr('font-size', 12).attr('font-weight', '700')
-          .attr('font-family', 'DM Sans, Arial, sans-serif')
-          .attr('fill', 'white')
-          .text(labelText);
-        try {
-          const bb = lTxt.node().getBBox();
-          lG.insert('rect','text')
-            .attr('x', bb.x - 5).attr('y', bb.y - 3)
-            .attr('width', bb.width + 10).attr('height', bb.height + 6)
-            .attr('rx', 4).attr('fill', color).attr('opacity', 0.92);
-        } catch(e) {
-          lG.insert('rect','text')
-            .attr('x', cx - 40).attr('y', topY - 22)
-            .attr('width', 80).attr('height', 18)
-            .attr('rx', 4).attr('fill', color).attr('opacity', 0.92);
-        }
-        if (legendEl) {
-          const item = document.createElement('span');
-          item.style.cssText = 'display:flex;align-items:center;gap:4px';
-          item.innerHTML = `<span style="width:10px;height:10px;border-radius:2px;background:${color};flex-shrink:0;display:inline-block"></span><span>${seg}</span>`;
-          legendEl.appendChild(item);
-        }
+      // Build legend
+      segKeys.forEach(seg => {
+        if (!legendEl) return;
+        const color = segValueToColor[seg];
+        const item = document.createElement('span');
+        item.style.cssText = 'display:flex;align-items:center;gap:4px';
+        item.innerHTML = `<span style="width:12px;height:12px;border-radius:3px;background:${color};flex-shrink:0;display:inline-block"></span><span>${seg}</span>`;
+        legendEl.appendChild(item);
       });
     }
   }
-  // ── Fin segmentación overlay ──────────────────────────────────────────────
+  // ── Detección de nodos anómalos ───────────────────────────────────────────
+  // Un nodo es "anómalo" si su segmento difiere del segmento mayoritario de sus vecinos directos
+  const anomalySet = new Set(); // IDs de nodos aislados en segmentación
+  const anomalyDetails = [];    // [{id, ownSeg, neighborSeg, neighborCount}]
+
+  if (S1_SEG_COL && Object.keys(idToSegColor).length > 0) {
+    const allNodes = root.descendants().filter(d => !d.data.isVirtual);
+    allNodes.forEach(d => {
+      const ownSeg = idToSegColor[d.data.id] ? Object.keys(segValueToColor).find(k => segValueToColor[k] === idToSegColor[d.data.id]) : null;
+      if (!ownSeg) return; // sin segmento asignado, no evaluar
+
+      // Recoger vecinos: padre (si no virtual) + hijos (si no virtuales)
+      const neighbors = [];
+      if (d.parent && !d.parent.data.isVirtual) neighbors.push(d.parent);
+      if (d.children) d.children.filter(c => !c.data.isVirtual).forEach(c => neighbors.push(c));
+
+      if (!neighbors.length) return; // raíz sola, no hay con qué comparar
+
+      // Contar segmentos de vecinos
+      const segCount = {};
+      neighbors.forEach(n => {
+        const nSeg = Object.keys(segValueToColor).find(k => segValueToColor[k] === idToSegColor[n.data.id]);
+        if (nSeg) segCount[nSeg] = (segCount[nSeg] || 0) + 1;
+      });
+
+      if (!Object.keys(segCount).length) return; // vecinos sin segmento
+
+      // Segmento dominante entre vecinos
+      const dominantSeg = Object.entries(segCount).sort((a, b) => b[1] - a[1])[0][0];
+      if (dominantSeg !== ownSeg) {
+        anomalySet.add(d.data.id);
+        anomalyDetails.push({
+          id: d.data.id,
+          ownSeg,
+          neighborSeg: dominantSeg,
+          neighborCount: neighbors.length
+        });
+      }
+    });
+
+    // Mostrar/ocultar panel y llenar tabla
+    const panel = document.getElementById('s1-anomaly-panel');
+    const tbody = document.getElementById('s1-anomaly-tbody');
+    if (panel && tbody) {
+      if (anomalyDetails.length) {
+        tbody.innerHTML = '';
+        anomalyDetails.sort((a, b) => a.id.localeCompare(b.id)).forEach(item => {
+          const ownColor = segValueToColor[item.ownSeg] || '#999';
+          const nColor   = segValueToColor[item.neighborSeg] || '#999';
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td style="font-weight:600">${item.id}</td>
+            <td><span style="display:inline-flex;align-items:center;gap:5px">
+              <span style="width:10px;height:10px;border-radius:2px;background:${ownColor};display:inline-block;flex-shrink:0"></span>${item.ownSeg}
+            </span></td>
+            <td><span style="display:inline-flex;align-items:center;gap:5px">
+              <span style="width:10px;height:10px;border-radius:2px;background:${nColor};display:inline-block;flex-shrink:0"></span>${item.neighborSeg}
+            </span></td>
+            <td>${item.neighborCount}</td>`;
+          tbody.appendChild(tr);
+        });
+        panel.style.display = '';
+      } else {
+        panel.style.display = 'none';
+      }
+    }
+  } else {
+    const panel = document.getElementById('s1-anomaly-panel');
+    if (panel) panel.style.display = 'none';
+  }
+  // ── Fin detección anómalos ────────────────────────────────────────────────
 
   // Aristas: elbow connector (líneas en ángulo recto, más legible)
   const links = root.links().filter(l => !l.source.data.isVirtual);
@@ -2992,18 +3027,41 @@ function s1DrawOrg(orgResult) {
     .attr('class', 'org-node')
     .attr('transform', d => `translate(${d.x - NODE_W/2},${d.y - NODE_H/2})`);
 
+  // Anillo exterior para nodos anómalos (se dibuja primero, queda detrás)
+  node.filter(d => anomalySet.has(d.data.id))
+    .append('rect')
+    .attr('class', 'anomaly-ring')
+    .attr('x', -4).attr('y', -4)
+    .attr('width', NODE_W + 8).attr('height', NODE_H + 8)
+    .attr('rx', NODE_RX + 3)
+    .attr('fill', 'none')
+    .attr('stroke', '#FF8C00')
+    .attr('stroke-width', 2.5)
+    .attr('stroke-dasharray', '5,3')
+    .attr('stroke-dashoffset', '0')
+    .attr('opacity', 0.9);
+
   node.append('rect')
     .attr('width', NODE_W).attr('height', NODE_H).attr('rx', NODE_RX)
-    .attr('fill', d => d.data.hasError ? '#8B2020' : '#1A4A7A')
+    .attr('fill', d => {
+      if (d.data.hasError) return '#8B2020';
+      const segColor = idToSegColor[d.data.id];
+      return segColor || '#1A4A7A';
+    })
     .attr('stroke', d => {
       if (d.data.hasError) return '#FF9999';
-      const segColor = idToSegColor[d.data.id];
-      return segColor || 'rgba(255,255,255,0.15)';
+      if (anomalySet.has(d.data.id)) return '#FF8C00';
+      return 'rgba(255,255,255,0.25)';
     })
-    .attr('stroke-width', d => {
-      if (d.data.hasError) return 2;
-      return idToSegColor[d.data.id] ? 3 : 1;
-    });
+    .attr('stroke-width', d => (d.data.hasError || anomalySet.has(d.data.id)) ? 2 : 1);
+
+  // Icono ⚠ en esquina de nodos anómalos
+  node.filter(d => anomalySet.has(d.data.id))
+    .append('text')
+    .attr('x', NODE_W - 4).attr('y', 4)
+    .attr('text-anchor', 'end').attr('dominant-baseline', 'hanging')
+    .attr('font-size', 10)
+    .text('⚠');
 
   node.append('text')
     .attr('x', NODE_W/2).attr('y', NODE_H/2)
@@ -3017,6 +3075,10 @@ function s1DrawOrg(orgResult) {
   node.append('title').text(d => {
     if (d.data.noJef)  return d.data.id + ' ⚠ Sin jefatura asignada';
     if (d.data.badJef) return d.data.id + ` ⚠ Jefatura "${d.data.jefaturaAsignada}" no existe`;
+    if (anomalySet.has(d.data.id)) {
+      const info = anomalyDetails.find(x => x.id === d.data.id);
+      return info ? `${d.data.id}\n⚠ Aislado: segmento "${info.ownSeg}" rodeado de "${info.neighborSeg}"` : d.data.id + ' ⚠ Aislado en segmentación';
+    }
     return d.data.id;
   });
 
