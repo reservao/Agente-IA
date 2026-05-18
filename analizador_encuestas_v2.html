@@ -2873,6 +2873,10 @@ function s1DrawOrg(orgResult) {
   // ── Segmentación overlay (convex hull por grupo) ─────────────────────────
   const legendEl = document.getElementById('s1-seg-legend');
   if (legendEl) legendEl.innerHTML = '';
+
+  // Build id→color map (used both for hulls and node borders)
+  const idToSegColor = {};
+  const segValueToColor = {};
   if (S1_SEG_COL && S1.headers && S1.rows) {
     const segIdx   = S1.headers.indexOf(S1_SEG_COL);
     const idColName = (S1.colMap && S1.colMap['s1id']) || '';
@@ -2884,6 +2888,11 @@ function s1DrawOrg(orgResult) {
         const seg = String(row[segIdx] || '').trim();
         if (id && seg) idToSeg[id] = seg;
       });
+      const segKeys = [...new Set(Object.values(idToSeg))].sort();
+      segKeys.forEach((seg, i) => { segValueToColor[seg] = S1_SEG_PALETTE[i % S1_SEG_PALETTE.length]; });
+      Object.entries(idToSeg).forEach(([id, seg]) => { idToSegColor[id] = segValueToColor[seg]; });
+
+      // Draw hulls
       const PAD = NODE_W / 2 + 24;
       const VPAD = NODE_H / 2 + 24;
       const segGroups = {};
@@ -2891,7 +2900,6 @@ function s1DrawOrg(orgResult) {
         const seg = idToSeg[d.data.id];
         if (!seg) return;
         if (!segGroups[seg]) segGroups[seg] = [];
-        // Use node corners + mid-edge points for a better hull
         const nx = d.x, ny = d.y;
         segGroups[seg].push(
           [nx - PAD, ny - VPAD], [nx + PAD, ny - VPAD],
@@ -2900,18 +2908,23 @@ function s1DrawOrg(orgResult) {
           [nx - PAD, ny],        [nx + PAD, ny]
         );
       });
-      const segKeys = Object.keys(segGroups).sort();
+
+      // Sort by hull area descending so smaller groups render on top
+      const hullEntries = segKeys.map(seg => {
+        const pts  = segGroups[seg] || [];
+        const hull = pts.length ? d3.polygonHull(pts) : null;
+        const area = hull ? Math.abs(d3.polygonArea(hull)) : 0;
+        return { seg, hull, area, color: segValueToColor[seg] };
+      }).filter(e => e.hull && e.hull.length >= 3)
+        .sort((a, b) => b.area - a.area);
+
       const hullG = g.append('g').attr('class', 'seg-hull-layer');
       hullG.lower();
       const lineGen = d3.line().curve(d3.curveCatmullRomClosed.alpha(0.5));
-      segKeys.forEach((seg, i) => {
-        const pts   = segGroups[seg];
-        const hull  = d3.polygonHull(pts);
-        if (!hull || hull.length < 3) return;
-        const color = S1_SEG_PALETTE[i % S1_SEG_PALETTE.length];
-        const cx    = d3.mean(hull, p => p[0]);
-        const cy    = d3.mean(hull, p => p[1]);
-        // Expand hull slightly outward from centroid
+
+      hullEntries.forEach(({ seg, hull, color }) => {
+        const cx = d3.mean(hull, p => p[0]);
+        const cy = d3.mean(hull, p => p[1]);
         const expanded = hull.map(p => {
           const dx = p[0] - cx, dy = p[1] - cy;
           const dist = Math.sqrt(dx*dx + dy*dy) || 1;
@@ -2919,11 +2932,10 @@ function s1DrawOrg(orgResult) {
         });
         hullG.append('path')
           .attr('d', lineGen(expanded))
-          .attr('fill', color + '1A')
+          .attr('fill', color + '12')
           .attr('stroke', color)
           .attr('stroke-width', 2.5)
           .attr('stroke-linejoin', 'round');
-        // Label badge at top of hull
         const topY = Math.min(...expanded.map(p => p[1]));
         const labelText = seg.length > 24 ? seg.substring(0,23) + '…' : seg;
         const lG = hullG.append('g');
@@ -2946,7 +2958,6 @@ function s1DrawOrg(orgResult) {
             .attr('width', 80).attr('height', 18)
             .attr('rx', 4).attr('fill', color).attr('opacity', 0.92);
         }
-        // Legend item
         if (legendEl) {
           const item = document.createElement('span');
           item.style.cssText = 'display:flex;align-items:center;gap:4px';
@@ -2983,12 +2994,16 @@ function s1DrawOrg(orgResult) {
 
   node.append('rect')
     .attr('width', NODE_W).attr('height', NODE_H).attr('rx', NODE_RX)
-    .attr('fill', d => {
-      if (d.data.hasError) return '#8B2020';
-      return '#1A4A7A';
+    .attr('fill', d => d.data.hasError ? '#8B2020' : '#1A4A7A')
+    .attr('stroke', d => {
+      if (d.data.hasError) return '#FF9999';
+      const segColor = idToSegColor[d.data.id];
+      return segColor || 'rgba(255,255,255,0.15)';
     })
-    .attr('stroke', d => d.data.hasError ? '#FF9999' : 'rgba(255,255,255,0.15)')
-    .attr('stroke-width', d => d.data.hasError ? 2 : 1);
+    .attr('stroke-width', d => {
+      if (d.data.hasError) return 2;
+      return idToSegColor[d.data.id] ? 3 : 1;
+    });
 
   node.append('text')
     .attr('x', NODE_W/2).attr('y', NODE_H/2)
