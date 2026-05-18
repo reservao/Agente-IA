@@ -3167,35 +3167,40 @@ function s1DownloadOrgPDF() {
     ctx.closePath();
   }
 
-  // Medidas del recuadro de leyenda
-  const SWATCH   = 11;
-  const ROW_H    = 18;
-  const IPAD     = 10; // padding interno
-  const maxLabel = 22; // chars máx por etiqueta
-  const BOX_W    = 170;
-  const BOX_H    = hasLegend ? (IPAD * 2 + 16 + segEntries.length * ROW_H + (S1_ANOMALY_DETAILS.length ? 20 : 0)) : 0;
-  const MARGIN   = 16; // margen desde el borde del PNG
+  // Medidas del recuadro de leyenda (franja debajo del árbol, sin solapar)
+  const SWATCH   = 12;
+  const ROW_H    = 20;
+  const IPAD     = 12; // padding interno del recuadro
+  const maxLabel = 28; // chars máx por etiqueta
+  const BOX_W    = 200;
+  const BOX_H    = hasLegend ? (IPAD * 2 + 18 + segEntries.length * ROW_H + (S1_ANOMALY_DETAILS.length ? 22 : 0)) : 0;
+  const STRIP_H  = hasLegend ? BOX_H + 24 : 0; // altura total de la franja inferior
+  const MARGIN   = 12;
 
-  // Función para dibujar la leyenda como overlay en esquina inferior izquierda
-  function drawLegend(ctx, canvasW, canvasH) {
+  // Función para dibujar la leyenda en la franja inferior izquierda
+  function drawLegend(ctx, canvasW, orgH) {
     if (!hasLegend) return;
     const bx = MARGIN;
-    const by = canvasH - BOX_H - MARGIN;
+    const by = orgH + 12; // 12px de margen superior dentro de la franja
 
-    // Sombra suave
-    ctx.shadowColor = 'rgba(0,0,0,0.18)';
-    ctx.shadowBlur  = 8;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 2;
+    // Fondo blanco de la franja completa
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, orgH, canvasW, STRIP_H);
 
-    // Fondo blanco con borde
-    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    // Línea separadora sutil
+    ctx.strokeStyle = '#D8D4CC';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(0, orgH);
+    ctx.lineTo(canvasW, orgH);
+    ctx.stroke();
+
+    // Recuadro de la leyenda
+    ctx.fillStyle = '#F4F2EE';
     ctxRoundRect(ctx, bx, by, BOX_W, BOX_H, 6);
     ctx.fill();
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur  = 0;
     ctx.strokeStyle = '#C8C4BC';
-    ctx.lineWidth   = 0.8;
+    ctx.lineWidth = 0.8;
     ctxRoundRect(ctx, bx, by, BOX_W, BOX_H, 6);
     ctx.stroke();
 
@@ -3204,39 +3209,37 @@ function s1DownloadOrgPDF() {
       ? (S1_SEG_COL || 'Segmentación').substring(0, maxLabel - 1) + '…'
       : (S1_SEG_COL || 'Segmentación');
     ctx.fillStyle = '#1A2B4A';
-    ctx.font = 'bold 10px Arial, sans-serif';
+    ctx.font = 'bold 11px Arial, sans-serif';
     ctx.fillText(title, bx + IPAD, by + IPAD + 9);
 
-    // Línea separadora
-    ctx.strokeStyle = '#E0DDD8';
+    // Línea separadora interna
+    ctx.strokeStyle = '#D8D4CC';
     ctx.lineWidth = 0.6;
     ctx.beginPath();
-    ctx.moveTo(bx + IPAD, by + IPAD + 14);
-    ctx.lineTo(bx + BOX_W - IPAD, by + IPAD + 14);
+    ctx.moveTo(bx + IPAD, by + IPAD + 15);
+    ctx.lineTo(bx + BOX_W - IPAD, by + IPAD + 15);
     ctx.stroke();
 
-    // Items
+    // Items de leyenda
     segEntries.forEach(([seg, color], i) => {
-      const iy = by + IPAD + 16 + i * ROW_H + 2;
+      const iy = by + IPAD + 18 + i * ROW_H;
 
-      // Cuadro de color
       ctx.fillStyle = color;
-      ctxRoundRect(ctx, bx + IPAD, iy, SWATCH, SWATCH, 2);
+      ctxRoundRect(ctx, bx + IPAD, iy + 2, SWATCH, SWATCH, 2);
       ctx.fill();
 
-      // Etiqueta
       ctx.fillStyle = '#2C2C2C';
-      ctx.font = '9px Arial, sans-serif';
+      ctx.font = '10px Arial, sans-serif';
       const label = seg.length > maxLabel ? seg.substring(0, maxLabel - 1) + '…' : seg;
-      ctx.fillText(label, bx + IPAD + SWATCH + 6, iy + SWATCH / 2 + 3);
+      ctx.fillText(label, bx + IPAD + SWATCH + 7, iy + SWATCH / 2 + 5);
     });
 
     // Nota anómalos
     if (S1_ANOMALY_DETAILS.length) {
-      const ny = by + IPAD + 16 + segEntries.length * ROW_H + 4;
+      const ny = by + IPAD + 18 + segEntries.length * ROW_H + 4;
       ctx.fillStyle = '#CC6600';
-      ctx.font = '8px Arial, sans-serif';
-      ctx.fillText(`⚠ ${S1_ANOMALY_DETAILS.length} persona(s) aislada(s)`, bx + IPAD, ny + 9);
+      ctx.font = '9px Arial, sans-serif';
+      ctx.fillText(`⚠ ${S1_ANOMALY_DETAILS.length} persona(s) con segmento diferente a sus vecinos`, bx + IPAD, ny + 9);
     }
   }
 
@@ -3258,13 +3261,14 @@ function s1DownloadOrgPDF() {
   const svgB64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
 
   const SCALE = 2;
+  const totalH = svgH + STRIP_H;
   const img = new Image();
 
   img.onload = () => {
     try {
       const canvas = document.createElement('canvas');
       canvas.width  = svgW * SCALE;
-      canvas.height = svgH * SCALE;
+      canvas.height = totalH * SCALE;
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#F9F8F5';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
