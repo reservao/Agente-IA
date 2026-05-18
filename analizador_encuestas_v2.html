@@ -1247,10 +1247,12 @@ function checkRanges(headers, rows, detected) {
   for (const { dim, qCols } of detected.found) {
     for (const { q, col } of qCols) {
       const rango = dim.rango;
+      const colIdx = headers.indexOf(col);
+      const idIdx = headers.indexOf(idCol);
       const outRows = [], emptyRows = [];
       rows.forEach((row, ri) => {
-        const val = row[headers.indexOf(col)];
-        const id = row[headers.indexOf(idCol)];
+        const val = colIdx >= 0 ? row[colIdx] : undefined;
+        const id = idIdx >= 0 ? row[idIdx] : ri;
         if (val === '' || val === null || val === undefined || (typeof val === 'number' && isNaN(val))) {
           emptyRows.push({ ri, id, val: '(vacío)' });
         } else {
@@ -1283,13 +1285,15 @@ function runCalcAnalysis(headers, rows, detected) {
     }
     const sysCol = findSysCol(dim, headers);
     const calcColName = 'CALC_' + dim.nombre;
+    const qColIdxs = qCols.map(x => headers.indexOf(x.col));
+    const sysColIdx = sysCol ? headers.indexOf(sysCol) : -1;
     const errRows = [];
     rows.forEach((row, ri) => {
-      const nums = qCols.map(x => parseFloat(row[headers.indexOf(x.col)])).filter(v => !isNaN(v));
+      const nums = qColIdxs.map(i => parseFloat(i >= 0 ? row[i] : NaN)).filter(v => !isNaN(v));
       if (nums.length !== qCols.length) return;
       const calc = nums.reduce((a, b) => a + b, 0) / nums.length;
       if (!sysCol) return;
-      const sys = parseFloat(row[headers.indexOf(sysCol)]);
+      const sys = parseFloat(sysColIdx >= 0 ? row[sysColIdx] : NaN);
       if (isNaN(sys)) return;
       if (Math.abs(calc - sys) >= THR) errRows.push({ rowIdx: ri, id: row[headers.indexOf(idCol)], calc: +calc.toFixed(4), sys: +sys.toFixed(4), diff: +(Math.abs(calc - sys)).toFixed(4) });
     });
@@ -3553,6 +3557,10 @@ function rcProcess(wb, filename) {
   }
   const ws = wb.Sheets[bestSheet];
   const json = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+  if (!json || !json.length || !json[0] || !json[0].length) {
+    alert('El archivo está vacío o no tiene columnas. Verifica que sea un archivo Excel válido.');
+    return;
+  }
   RC.headers = json[0].map(String);
   RC.rows = json.slice(1).filter(r => r.some(c => c !== ''));
   RC.filename = filename;
@@ -3596,16 +3604,33 @@ function rcProcess(wb, filename) {
       </label>`;
   }
 
-  // Variable checkboxes — only show vars that exist in data
+  // Variable checkboxes — show known vars that exist + any unknown numeric columns
   const availableVars = RC_VARS.filter(v => {
     if (v.special) return RC.headers.some(h => /enps_tag/i.test(h));
     return rColIdxFuzzy(v.col) >= 0;
   });
-  document.getElementById('rc-var-list').innerHTML = availableVars.map((v,i) => `
+
+  // Build set of column indexes already covered by known vars
+  const coveredIdxs = new Set(availableVars.map(v => rColIdxFuzzy(v.col)).filter(i => i >= 0));
+
+  // Add any numeric columns not already covered (handles arbitrary file formats)
+  RC.headers.forEach((h, idx) => {
+    if (coveredIdxs.has(idx)) return;
+    // Skip obvious non-numeric / identifier columns
+    if (/id|nombre|rut|empresa|cargo|area|gerencia|fecha|medicion|email/i.test(h)) return;
+    const sample = RC.rows.slice(0, 30).map(r => parseFloat(r[idx])).filter(v => !isNaN(v));
+    if (sample.length >= 3) {
+      availableVars.push({ label: h, col: h, _extra: true });
+    }
+  });
+
+  document.getElementById('rc-var-list').innerHTML = availableVars.length
+    ? availableVars.map((v,i) => `
     <label style="display:flex;align-items:center;gap:6px;padding:.3rem .5rem;font-size:12px;cursor:pointer;border-radius:3px" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
-      <input type="checkbox" id="rcvar${i}" data-col="${v.col}" data-label="${v.label}" ${!v.group?'checked':''} style="cursor:pointer;accent-color:var(--accent)">
+      <input type="checkbox" id="rcvar${i}" data-col="${v.col}" data-label="${v.label}" ${(!v.group && !v._extra)?'checked':''} style="cursor:pointer;accent-color:var(--accent)">
       <span>${v.label}</span>
-    </label>`).join('');
+    </label>`).join('')
+    : '<p style="font-size:12px;color:var(--text2);padding:.5rem">No se encontraron columnas numéricas en el archivo.</p>';
 
   // Segmentation columns
   const segSel = document.getElementById('rc-seg-col');
@@ -3669,7 +3694,8 @@ function rcGenerate() {
     // Histogram: distribution of first selected variable
     const v = selVars[0];
     const allRows = RC.selectedMeds.flatMap(m => rowsByMed[m]);
-    const vals = allRows.map(r => parseFloat(r[rColIdxFuzzy(v.col)])).filter(x => !isNaN(x));
+    const vColIdx = rColIdxFuzzy(v.col);
+    const vals = vColIdx >= 0 ? allRows.map(r => parseFloat(r[vColIdx])).filter(x => !isNaN(x)) : [];
     if(!vals.length){ alert('No hay datos numéricos para el histograma.'); return; }
     const min = Math.min(...vals), max = Math.max(...vals);
     if(min === max){ alert('Todos los valores son iguales (' + min + '). No se puede generar un histograma.'); return; }
@@ -3686,10 +3712,11 @@ function rcGenerate() {
     }
     const vX = selVars[0], vY = selVars[1];
     RC.selectedMeds.forEach((m, mi) => {
-      const pts = rowsByMed[m].map(r => ({
-        x: parseFloat(r[rColIdxFuzzy(vX.col)]),
-        y: parseFloat(r[rColIdxFuzzy(vY.col)])
-      })).filter(p => !isNaN(p.x) && !isNaN(p.y));
+      const vXIdx = rColIdxFuzzy(vX.col), vYIdx = rColIdxFuzzy(vY.col);
+      const pts = (vXIdx >= 0 && vYIdx >= 0) ? rowsByMed[m].map(r => ({
+        x: parseFloat(r[vXIdx]),
+        y: parseFloat(r[vYIdx])
+      })).filter(p => !isNaN(p.x) && !isNaN(p.y)) : [];
       datasets.push({ label: m, data: pts, backgroundColor: RC_PALETTE[mi%RC_PALETTE.length]+'99', pointRadius:4 });
     });
     labels = [];
@@ -3746,8 +3773,10 @@ function rcGenerate() {
   }
 
   // Render chart
-  const ctx = document.getElementById('rc-canvas').getContext('2d');
-  if (RC.chart) RC.chart.destroy();
+  const rcCanvas = document.getElementById('rc-canvas');
+  if (!rcCanvas) { console.error('rc-canvas not found'); return; }
+  if (RC.chart) { RC.chart.destroy(); RC.chart = null; }
+  const ctx = rcCanvas.getContext('2d');
 
   const isHorizontal = type === 'bar' || type === 'bar100';
   const isLine = type === 'line';
@@ -3846,6 +3875,7 @@ function rcDownloadPPT() {
 function rcLoadFile(e) {
   const f = e.target.files[0]; if (!f) return;
   const reader = new FileReader();
+  reader.onerror = () => alert('Error leyendo el archivo. Verifica que no esté dañado.');
   reader.onload = ev => rcProcess(XLSX.read(ev.target.result,{type:'array'}), f.name);
   reader.readAsArrayBuffer(f);
 }
@@ -4029,7 +4059,7 @@ function rcpColIdxFuzzy(col) {
   return colAliasLookup(nc, RCP.headers, rcpNorm);
 }
 function rcpMean(rows, col) {
-  const idx = rcpColIdx(col);
+  const idx = rcpColIdxFuzzy(col);
   if (idx<0) return null;
   const vals = rows.map(r=>parseFloat(r[idx])).filter(v=>!isNaN(v));
   return vals.length ? +(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2) : null;
@@ -4043,6 +4073,7 @@ function rcpDimMean(rows, dimCol, itemCols) {
 
 function rcpRowsByMed(med) {
   const idx = rcpColIdx(RCP.medCol);
+  if (idx < 0) return RCP.rows;
   return RCP.rows.filter(r=>String(r[idx]).trim()===med);
 }
 
@@ -4055,13 +4086,18 @@ function rcpProcess(wb, filename) {
   }
   const ws=wb.Sheets[bestSheet];
   const json=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+  if (!json || !json.length || !json[0] || !json[0].length) {
+    alert('El archivo está vacío o no tiene columnas. Verifica que sea un archivo Excel válido.');
+    return;
+  }
   RCP.headers=json[0].map(String);
   RCP.rows=json.slice(1).filter(r=>r.some(c=>c!==''));
   RCP.filename=filename;
   const medIdx=RCP.headers.findIndex(h=>rcpNorm(h).includes('medicion'));
-  RCP.medCol=RCP.headers[medIdx]||RCP.headers[0];
+  RCP.medCol=medIdx>=0 ? RCP.headers[medIdx] : RCP.headers[0];
+  const safemedIdx=medIdx>=0 ? medIdx : 0;
   const mc={};
-  RCP.rows.forEach(r=>{const m=String(r[medIdx]||'').trim();if(m)mc[m]=(mc[m]||0)+1;});
+  RCP.rows.forEach(r=>{const m=String(r[safemedIdx]||'').trim();if(m)mc[m]=(mc[m]||0)+1;});
   RCP.mediciones=Object.keys(mc).sort();
 
   document.getElementById('rcp-fname').textContent=filename;
@@ -4069,10 +4105,10 @@ function rcpProcess(wb, filename) {
 
   // Build cards for available charts
   const cards = RCP_DEFS.map((def,i) => {
-    // Check if required columns exist
+    // Check if required columns exist (use fuzzy matching for non-standard column names)
     const available = def.requiere.every(col => {
       if(col==='eNPS_tag') return RCP.headers.some(h=>/enps_tag/i.test(h));
-      return rcpColIdx(col)>=0;
+      return rcpColIdxFuzzy(col)>=0;
     });
     const onclickAttr = available ? 'rcpSelectDef(' + i + ')' : '';
     const bgColor = available ? 'var(--surface)' : 'var(--bg2)';
@@ -4295,7 +4331,9 @@ function rcpGenerate() {
   if(!def) return;
 
   if(RCP.chart){RCP.chart.destroy();RCP.chart=null;}
-  const ctx = document.getElementById('rcp-canvas').getContext('2d');
+  const rcpCanvas = document.getElementById('rcp-canvas');
+  if (!rcpCanvas) { console.error('rcp-canvas not found'); return; }
+  const ctx = rcpCanvas.getContext('2d');
 
   // ── RECURSOS Y DEMANDAS ──────────────────────────────────────────────────
   const ALL_DIMS = [
@@ -4313,7 +4351,7 @@ function rcpGenerate() {
     {label:'Demandas Emocionales',    col:'EMOTIONAL_DEMANDS',          tipo:'demanda'},
     {label:'Conflicto de Rol',        col:'ROLE_CONFLICT',              tipo:'demanda'},
     {label:'Trabas en el Trabajo',    col:'HASSLES',                    tipo:'demanda'},
-  ].filter(d => rcpColIdx(d.col)>=0);
+  ].filter(d => rcpColIdxFuzzy(d.col)>=0);
 
   let chartCfg = null;
 
@@ -4627,7 +4665,8 @@ function rcpGenerate() {
     const med=rcpGetParam('med'), cla=rcpGetParam('cla');
     const claIdx=RCP.headers.indexOf(cla);
     const medRows=rcpRowsByMed(med);
-    const engIdx=rcpColIdx('WORK_ENGAGEMENT'), agoIdx=rcpColIdx('EXHAUSTION');
+    const engIdx=rcpColIdxFuzzy('WORK_ENGAGEMENT'), agoIdx=rcpColIdxFuzzy('EXHAUSTION');
+    if (engIdx < 0 || agoIdx < 0) { alert('No se encontraron columnas de Engagement o Agotamiento en el archivo.'); return; }
     const engVals=medRows.map(r=>parseFloat(r[engIdx])).filter(v=>!isNaN(v));
     const agoVals=medRows.map(r=>parseFloat(r[agoIdx])).filter(v=>!isNaN(v));
     const engVals_s=[...engVals].sort((a,b)=>a-b);
@@ -4769,6 +4808,7 @@ function rcpReset() {
 function rcpLoadFile(e){
   const f=e.target.files[0];if(!f)return;
   const r=new FileReader();
+  r.onerror=()=>alert('Error leyendo el archivo. Verifica que no esté dañado.');
   r.onload=ev=>rcpProcess(XLSX.read(ev.target.result,{type:'array'}),f.name);
   r.readAsArrayBuffer(f);
 }
