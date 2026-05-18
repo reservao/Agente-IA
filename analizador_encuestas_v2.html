@@ -3505,8 +3505,15 @@ function rcColIdx(col) {
   return RC.headers.findIndex(h => h === col || rcNorm(h) === rcNorm(col));
 }
 
+function rColIdxFuzzy(name) {
+  var idx = rcColIdx(name);
+  if (idx >= 0) return idx;
+  var nc = rcNorm(name).replace(/_/g, '');
+  return colAliasLookup(nc, RC.headers, rcNorm);
+}
+
 function rcMean(rows, col) {
-  const idx = rcColIdx(col);
+  const idx = rColIdxFuzzy(col);
   if (idx < 0) return null;
   const vals = rows.map(r => parseFloat(r[idx])).filter(v => !isNaN(v));
   return vals.length ? +(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2) : null;
@@ -3551,31 +3558,48 @@ function rcProcess(wb, filename) {
   RC.filename = filename;
 
   const medIdx = RC.headers.findIndex(h => rcNorm(h).includes('medicion'));
-  RC.medCol = RC.headers[medIdx] || RC.headers[0];
-  const medCount = {};
-  RC.rows.forEach(r => {
-    const m = String(r[medIdx]||'').trim();
-    if (m) medCount[m] = (medCount[m]||0)+1;
-  });
-  RC.mediciones = Object.keys(medCount).sort();
-  RC.selectedMeds = [...RC.mediciones];
+  if (medIdx >= 0) {
+    RC.medCol = RC.headers[medIdx];
+    RC._singleMed = false;
+    const medCount = {};
+    RC.rows.forEach(r => {
+      const m = String(r[medIdx]||'').trim();
+      if (m) medCount[m] = (medCount[m]||0)+1;
+    });
+    RC.mediciones = Object.keys(medCount).sort();
+    RC.selectedMeds = [...RC.mediciones];
 
-  document.getElementById('rc-fname').textContent = filename;
-  document.getElementById('rc-fmeta').textContent = RC.rows.length + ' personas · ' + RC.mediciones.length + ' mediciones';
+    document.getElementById('rc-fname').textContent = filename;
+    document.getElementById('rc-fmeta').textContent = RC.rows.length + ' personas · ' + RC.mediciones.length + ' mediciones';
 
-  // Measurement checkboxes
-  document.getElementById('rc-med-list').innerHTML = RC.mediciones.map((m,i) => `
-    <label style="display:flex;align-items:center;gap:10px;padding:.4rem .75rem;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)">
-      <input type="checkbox" id="rcmed${i}" checked style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)"
-             onchange="rcToggleMed('${m.replace(/'/g,"\'")}',this.checked)">
-      <span style="flex:1;font-weight:500">${m}</span>
-      <span style="font-size:11px;color:var(--text2)">${medCount[m]} personas</span>
-    </label>`).join('');
+    document.getElementById('rc-med-list').innerHTML = RC.mediciones.map((m,i) => `
+      <label style="display:flex;align-items:center;gap:10px;padding:.4rem .75rem;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)">
+        <input type="checkbox" id="rcmed${i}" checked style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)"
+               onchange="rcToggleMed('${m.replace(/'/g,"\'")}',this.checked)">
+        <span style="flex:1;font-weight:500">${m}</span>
+        <span style="font-size:11px;color:var(--text2)">${medCount[m]} personas</span>
+      </label>`).join('');
+  } else {
+    RC.medCol = '__single__';
+    RC._singleMed = true;
+    RC.mediciones = ['Medición única'];
+    RC.selectedMeds = ['Medición única'];
+
+    document.getElementById('rc-fname').textContent = filename;
+    document.getElementById('rc-fmeta').textContent = RC.rows.length + ' personas · medición única';
+
+    document.getElementById('rc-med-list').innerHTML = `
+      <label style="display:flex;align-items:center;gap:10px;padding:.4rem .75rem;border:1px solid var(--accent-border);border-radius:var(--radius-sm);font-size:13px;background:var(--accent-light)">
+        <input type="checkbox" checked disabled style="width:14px;height:14px;accent-color:var(--accent)">
+        <span style="flex:1;font-weight:500">Medición única</span>
+        <span style="font-size:11px;color:var(--text2)">${RC.rows.length} personas</span>
+      </label>`;
+  }
 
   // Variable checkboxes — only show vars that exist in data
   const availableVars = RC_VARS.filter(v => {
     if (v.special) return RC.headers.some(h => /enps_tag/i.test(h));
-    return rcColIdx(v.col) >= 0;
+    return rColIdxFuzzy(v.col) >= 0;
   });
   document.getElementById('rc-var-list').innerHTML = availableVars.map((v,i) => `
     <label style="display:flex;align-items:center;gap:6px;padding:.3rem .5rem;font-size:12px;cursor:pointer;border-radius:3px" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
@@ -3623,11 +3647,15 @@ function rcGenerate() {
   });
   if (!selVars.length) { alert('Selecciona al menos una variable o dimensión.'); return; }
 
-  const medIdx = RC.headers.indexOf(RC.medCol);
   const rowsByMed = {};
-  RC.selectedMeds.forEach(m => {
-    rowsByMed[m] = RC.rows.filter(r => String(r[medIdx]).trim() === m);
-  });
+  if (RC._singleMed) {
+    rowsByMed['Medición única'] = RC.rows;
+  } else {
+    const medIdx = RC.headers.indexOf(RC.medCol);
+    RC.selectedMeds.forEach(m => {
+      rowsByMed[m] = RC.rows.filter(r => String(r[medIdx]).trim() === m);
+    });
+  }
 
   const segColRaw = document.getElementById('rc-seg-col').value;
   const segCol = (segColRaw === '__org__') ? '' : segColRaw;
@@ -3641,7 +3669,7 @@ function rcGenerate() {
     // Histogram: distribution of first selected variable
     const v = selVars[0];
     const allRows = RC.selectedMeds.flatMap(m => rowsByMed[m]);
-    const vals = allRows.map(r => parseFloat(r[rcColIdx(v.col)])).filter(x => !isNaN(x));
+    const vals = allRows.map(r => parseFloat(r[rColIdxFuzzy(v.col)])).filter(x => !isNaN(x));
     if(!vals.length){ alert('No hay datos numéricos para el histograma.'); return; }
     const min = Math.min(...vals), max = Math.max(...vals);
     if(min === max){ alert('Todos los valores son iguales (' + min + '). No se puede generar un histograma.'); return; }
@@ -3659,8 +3687,8 @@ function rcGenerate() {
     const vX = selVars[0], vY = selVars[1];
     RC.selectedMeds.forEach((m, mi) => {
       const pts = rowsByMed[m].map(r => ({
-        x: parseFloat(r[rcColIdx(vX.col)]),
-        y: parseFloat(r[rcColIdx(vY.col)])
+        x: parseFloat(r[rColIdxFuzzy(vX.col)]),
+        y: parseFloat(r[rColIdxFuzzy(vY.col)])
       })).filter(p => !isNaN(p.x) && !isNaN(p.y));
       datasets.push({ label: m, data: pts, backgroundColor: RC_PALETTE[mi%RC_PALETTE.length]+'99', pointRadius:4 });
     });
