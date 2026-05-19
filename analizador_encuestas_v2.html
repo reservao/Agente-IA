@@ -2789,7 +2789,7 @@ function s1PopulateSegSelector() {
   S1.headers.forEach((h, idx) => {
     if (h === idColName || h === jefColName) return;
     const vals = new Set(S1.rows.map(r => String(r[idx]||'').trim()).filter(Boolean));
-    if (vals.size >= 2 && vals.size <= 30) {
+    if (vals.size >= 2 && vals.size <= 60) {
       const opt = document.createElement('option');
       opt.value = h;
       opt.textContent = h + ' (' + vals.size + ' grupos)';
