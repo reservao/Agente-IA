@@ -4011,8 +4011,22 @@ function rProcess(wb, filename) {
   R.rows = json.slice(1).filter(r => r.some(c => c !== ''));
   R.filename = filename;
 
-  // Detect measurement column
-  const medCol = rFindCol(['medicion','measurement','periodo','year','año'], R.headers) || R.headers[0];
+  // Detect measurement column — primero por palabras clave, luego por menor cardinalidad
+  let medCol = rFindCol(['medicion','measurement','periodo','year','año','mes','month','ola','wave'], R.headers);
+  if (!medCol) {
+    // Buscar la columna no-numérica con menos valores únicos (entre 1 y 30) que no sea el ID
+    const idLikePat = /^(id|rut|identificador|codigo|correo|email|nombre|apellido)/i;
+    let bestCol = null, bestUniq = Infinity;
+    R.headers.forEach((h, idx) => {
+      if (idLikePat.test(rNorm(h))) return;
+      const uniq = new Set(R.rows.map(r => String(r[idx] ?? '').trim()).filter(Boolean));
+      if (uniq.size >= 1 && uniq.size <= 30 && uniq.size < bestUniq) {
+        bestUniq = uniq.size;
+        bestCol = h;
+      }
+    });
+    medCol = bestCol || R.headers[0];
+  }
   const medIdx = R.headers.indexOf(medCol);
   const medCount = {};
   R.rows.forEach(row => {
@@ -4025,7 +4039,7 @@ function rProcess(wb, filename) {
 
   document.getElementById('r-fname').textContent = filename;
   document.getElementById('r-fmeta').textContent =
-    R.rows.length + ' personas · ' + R.mediciones.length + ' mediciones detectadas';
+    R.rows.length + ' personas · ' + R.mediciones.length + ' mediciones detectadas (columna: ' + medCol + ')';
 
   // Render checkboxes
   document.getElementById('r-med-list').innerHTML = R.mediciones.map((m, i) => `
