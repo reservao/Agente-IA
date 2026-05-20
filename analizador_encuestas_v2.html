@@ -4011,44 +4011,45 @@ function rProcess(wb, filename) {
   R.rows = json.slice(1).filter(r => r.some(c => c !== ''));
   R.filename = filename;
 
-  // Detect measurement column — primero por palabras clave, luego por menor cardinalidad
-  let medCol = rFindCol(['medicion','measurement','periodo','year','año','mes','month','ola','wave'], R.headers);
-  if (!medCol) {
-    // Buscar la columna no-numérica con menos valores únicos (entre 1 y 30) que no sea el ID
-    const idLikePat = /^(id|rut|identificador|codigo|correo|email|nombre|apellido)/i;
-    let bestCol = null, bestUniq = Infinity;
-    R.headers.forEach((h, idx) => {
-      if (idLikePat.test(rNorm(h))) return;
-      const uniq = new Set(R.rows.map(r => String(r[idx] ?? '').trim()).filter(Boolean));
-      if (uniq.size >= 1 && uniq.size <= 30 && uniq.size < bestUniq) {
-        bestUniq = uniq.size;
-        bestCol = h;
-      }
+  // Detect measurement column — solo por palabras clave; si no hay, medición única
+  const medCol = rFindCol(['medicion','measurement','periodo','year','año','mes','month','ola','wave'], R.headers);
+  let medCount = {};
+  if (medCol) {
+    const medIdx = R.headers.indexOf(medCol);
+    R.rows.forEach(row => {
+      const m = String(row[medIdx] ?? '').trim();
+      if (m) medCount[m] = (medCount[m] || 0) + 1;
     });
-    medCol = bestCol || R.headers[0];
+    R.mediciones   = Object.keys(medCount).sort();
+    R.medCol       = medCol;
+  } else {
+    // Sin columna de medición detectada → tratar como medición única
+    medCount = { 'Medición única': R.rows.length };
+    R.mediciones = ['Medición única'];
+    R.medCol     = '__single__';
   }
-  const medIdx = R.headers.indexOf(medCol);
-  const medCount = {};
-  R.rows.forEach(row => {
-    const m = String(row[medIdx] ?? '').trim();
-    if (m) medCount[m] = (medCount[m] || 0) + 1;
-  });
-  R.mediciones = Object.keys(medCount).sort();
   R.selectedMeds = [...R.mediciones];
-  R.medCol = medCol;
 
   document.getElementById('r-fname').textContent = filename;
-  document.getElementById('r-fmeta').textContent =
-    R.rows.length + ' personas · ' + R.mediciones.length + ' mediciones detectadas (columna: ' + medCol + ')';
+  document.getElementById('r-fmeta').textContent = medCol
+    ? R.rows.length + ' personas · ' + R.mediciones.length + ' mediciones detectadas (columna: ' + medCol + ')'
+    : R.rows.length + ' personas · medición única (no se detectó columna de período)';
 
-  // Render checkboxes
-  document.getElementById('r-med-list').innerHTML = R.mediciones.map((m, i) => `
-    <label style="display:flex;align-items:center;gap:10px;padding:.5rem .75rem;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)">
-      <input type="checkbox" id="rmed${i}" checked style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent)"
-             onchange="rToggleMed('${m.replace(/'/g,"\'")}', this.checked)">
-      <span style="flex:1;font-weight:500">${m}</span>
-      <span style="font-size:11px;color:var(--text2)">${medCount[m]} personas</span>
-    </label>`).join('');
+  // Render checkboxes — si es medición única, mostrar info pero sin checkbox
+  if (R.medCol === '__single__') {
+    document.getElementById('r-med-list').innerHTML = `
+      <div style="padding:.6rem .75rem;border:1px solid var(--accent-border);border-radius:var(--radius-sm);background:var(--accent-light);font-size:12px;color:var(--accent)">
+        No se detectó una columna de período/medición. Se usarán todos los datos como una sola medición.
+      </div>`;
+  } else {
+    document.getElementById('r-med-list').innerHTML = R.mediciones.map((m, i) => `
+      <label style="display:flex;align-items:center;gap:10px;padding:.5rem .75rem;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:13px;background:var(--surface)">
+        <input type="checkbox" id="rmed${i}" checked style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent)"
+               onchange="rToggleMed('${m.replace(/'/g,"\'")}', this.checked)">
+        <span style="flex:1;font-weight:500">${m}</span>
+        <span style="font-size:11px;color:var(--text2)">${medCount[m]} personas</span>
+      </label>`).join('');
+  }
 
   // ── Detectar columnas de clasificación y demográficas presentes ──────────
 
@@ -5863,14 +5864,14 @@ function rGenerate() {
   setTimeout(() => {
     try {
       const wb = XLSX.utils.book_new();
-      const medIdx = rColIdx(R.medCol);
+      const medIdx = R.medCol === '__single__' ? -1 : rColIdx(R.medCol);
       const empIdx = R.headers.findIndex(h => rNorm(h).includes('empresa') || rNorm(h).includes('company'));
       const empresa = R.rows[0] && empIdx >= 0 ? String(R.rows[0][empIdx]||'Empresa') : 'Empresa';
 
       // Filter rows by selected meds
       const rowsByMed = {};
       R.selectedMeds.forEach(m => {
-        rowsByMed[m] = R.rows.filter(r => String(r[medIdx]).trim() === m);
+        rowsByMed[m] = medIdx < 0 ? [...R.rows] : R.rows.filter(r => String(r[medIdx]).trim() === m);
       });
 
       for (const sh of R.sheetDefs) {
