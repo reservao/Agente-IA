@@ -5992,13 +5992,10 @@ function rGenerate() {
 function rBuildSheet(rows, colHeaders, title, groupBy) {
   groupBy = groupBy || 'med';
 
-  const C_HDR ='1F3864';
-  const C_DIM ='4472C4';  const C_DIM_F ='FFFFFF';
-  const C_SDIM='D6E4F5';  const C_SDIM_F='1F3864';
-  const C_N   ='F2F2F2';
-  const C_ALT ='F5F5F5';
-  const C_RED ='C00000';
-  const C_RED_BG='FFDCE0';
+  const C_DIM ='5B9BD5';  const C_DIM_F ='FFFFFF';
+  const C_SDIM='9BC2E6';  const C_SDIM_F='000000';
+  const C_N   ='D9D9D9';
+  const C_RED ='FF0000';
 
   // Build first-level groups preserving insertion order
   const firstGroups = new Map();
@@ -6043,57 +6040,60 @@ function rBuildSheet(rows, colHeaders, title, groupBy) {
 
   // ── COLOUR MAP PER DIMENSION ──────────────────────────────────────────────
   // Each dimension gets its own colour identity matching the reference design
-  // Paleta basada en el diseño de referencia del cliente
+  // Paleta exacta extraída del archivo de referencia del cliente
   const DIM_COLORS = {
-    // Engagement y sub-dimensiones (azul Excel estándar)
-    'Promedio Engagement':              { bg:'4472C4', fg:'FFFFFF' },
-    'Promedio Vigor':                   { bg:'4472C4', fg:'FFFFFF' },
-    'Promedio Dedicación':              { bg:'4472C4', fg:'FFFFFF' },
-    'Promedio Absorción':               { bg:'4472C4', fg:'FFFFFF' },
-    // Agotamiento (naranja Excel estándar)
+    // Engagement — azul medio #5B9BD5
+    'Promedio Engagement':              { bg:'5B9BD5', fg:'FFFFFF' },
+    // Agotamiento — naranja #ED7D31
     'Promedio Agotamiento':             { bg:'ED7D31', fg:'FFFFFF' },
-    // Recursos laborales (verde oscuro)
+    // Recursos laborales — verde oscuro (basado en referencia)
     'Promedio Oportunidades de Desarrollo': { bg:'375623', fg:'FFFFFF' },
     'Promedio Coaching del Líder':      { bg:'375623', fg:'FFFFFF' },
     'Promedio Retroalimentación':       { bg:'375623', fg:'FFFFFF' },
     'Promedio Colaboración':            { bg:'375623', fg:'FFFFFF' },
     'Promedio Autonomía':               { bg:'375623', fg:'FFFFFF' },
-    // Recursos personales (verde medio)
+    // Recursos personales — verde medio
     'Promedio Optimismo':               { bg:'4EA72A', fg:'FFFFFF' },
     'Promedio Autoeficacia':            { bg:'4EA72A', fg:'FFFFFF' },
-    // Demandas laborales (morado/ciruela)
+    // Demandas laborales — morado
     'Promedio Presión en el Trabajo':   { bg:'7030A0', fg:'FFFFFF' },
     'Promedio Demandas Cognitivas':     { bg:'7030A0', fg:'FFFFFF' },
     'Promedio Demandas Emocionales':    { bg:'7030A0', fg:'FFFFFF' },
     'Promedio Conflicto de Rol':        { bg:'7030A0', fg:'FFFFFF' },
     'Promedio Trabas en el Trabajo':    { bg:'7030A0', fg:'FFFFFF' },
-    // eNPS (negro)
+    // eNPS — negro puro
     'eNPS':                             { bg:'000000', fg:'FFFFFF' },
   };
   const SUBDIM_COLORS = {
-    // Sub-dims de Engagement — mismo azul que la dim principal
-    'Promedio Vigor':      { bg:'4472C4', fg:'FFFFFF' },
-    'Promedio Dedicación': { bg:'4472C4', fg:'FFFFFF' },
-    'Promedio Absorción':  { bg:'4472C4', fg:'FFFFFF' },
-    // eNPS breakdown — colores semáforo del screenshot
-    '% Promotores':   { bg:'C6EFCE', fg:'375623' },
-    '% Neutros':      { bg:'FFEB9C', fg:'9C5700' },
-    '% Detractores':  { bg:'FFC7CE', fg:'9C0006' },
+    // Sub-dims de Engagement — azul más claro #9BC2E6 con texto negro
+    'Promedio Vigor':      { bg:'9BC2E6', fg:'000000' },
+    'Promedio Dedicación': { bg:'9BC2E6', fg:'000000' },
+    'Promedio Absorción':  { bg:'9BC2E6', fg:'000000' },
+    // Sub-dims de Recursos laborales
+    'Promedio Oportunidades de Desarrollo': { bg:'70AD47', fg:'FFFFFF' },
+    'Promedio Coaching del Líder':      { bg:'70AD47', fg:'FFFFFF' },
+    'Promedio Retroalimentación':       { bg:'70AD47', fg:'FFFFFF' },
+    'Promedio Colaboración':            { bg:'70AD47', fg:'FFFFFF' },
+    'Promedio Autonomía':               { bg:'70AD47', fg:'FFFFFF' },
+    // eNPS breakdown — colores semáforo exactos del archivo de referencia
+    '% Promotores':   { bg:'CCFFCC', fg:'000000' },
+    '% Neutros':      { bg:'FFFFCC', fg:'000000' },
+    '% Detractores':  { bg:'FFBDBD', fg:'000000' },
   };
-  // Tinte claro para filas de preguntas (hereda del color de su dimensión)
+  // Tinte claro para preguntas individuales — exacto del archivo de referencia
   const DIM_ITEM_TINTS = {
-    'Promedio Engagement':  'DCE6F1',
-    'Promedio Vigor':       'DCE6F1',
-    'Promedio Dedicación':  'DCE6F1',
-    'Promedio Absorción':   'DCE6F1',
+    'Promedio Engagement':  'DDEBF7',
+    'Promedio Vigor':       'DDEBF7',
+    'Promedio Dedicación':  'DDEBF7',
+    'Promedio Absorción':   'DDEBF7',
     'Promedio Agotamiento': 'FCE4D6',
-    'Promedio Oportunidades de Desarrollo': 'EBF1DE',
-    'Promedio Coaching del Líder':    'EBF1DE',
-    'Promedio Retroalimentación':     'EBF1DE',
-    'Promedio Colaboración':          'EBF1DE',
-    'Promedio Autonomía':             'EBF1DE',
-    'Promedio Optimismo':             'EBF5E1',
-    'Promedio Autoeficacia':          'EBF5E1',
+    'Promedio Oportunidades de Desarrollo': 'E2EFDA',
+    'Promedio Coaching del Líder':    'E2EFDA',
+    'Promedio Retroalimentación':     'E2EFDA',
+    'Promedio Colaboración':          'E2EFDA',
+    'Promedio Autonomía':             'E2EFDA',
+    'Promedio Optimismo':             'E2EFDA',
+    'Promedio Autoeficacia':          'E2EFDA',
     'Promedio Presión en el Trabajo': 'EAD1F5',
     'Promedio Demandas Cognitivas':   'EAD1F5',
     'Promedio Demandas Emocionales':  'EAD1F5',
@@ -6114,26 +6114,29 @@ function rBuildSheet(rows, colHeaders, title, groupBy) {
     ws[a].s = style;
   }
   function cellStyle(bg, fontColor, bold, sz, halign, wrapText, numFmt) {
-    return {
-      fill: { patternType:'solid', fgColor: { rgb: bg } },
-      font: { color:{ rgb: fontColor||'000000' }, bold:!!bold, sz:sz||9, name:'Arial' },
+    const style = {
+      font: { color:{ rgb: fontColor||'000000' }, bold:!!bold, sz:sz||11, name:'Calibri' },
       alignment: { horizontal: halign||'center', vertical:'center', wrapText:!!wrapText },
-      border: { left:{style:'thin',color:{rgb:'D8D4CC'}}, right:{style:'thin',color:{rgb:'D8D4CC'}},
-                top:{style:'thin',color:{rgb:'D8D4CC'}}, bottom:{style:'thin',color:{rgb:'D8D4CC'}} },
+      border: { left:{style:'thin',color:{rgb:'BFBFBF'}}, right:{style:'thin',color:{rgb:'BFBFBF'}},
+                top:{style:'thin',color:{rgb:'BFBFBF'}}, bottom:{style:'thin',color:{rgb:'BFBFBF'}} },
       numFmt: numFmt || ''
     };
+    // Solo aplicar relleno si hay color de fondo explícito
+    if (bg && bg !== 'FFFFFF' && bg !== '00000000') {
+      style.fill = { patternType:'solid', fgColor: { rgb: bg } };
+    }
+    return style;
   }
 
-  // Header rows
-  // Row 0: Título — gris claro con texto oscuro
-  for (let c=0;c<nCols;c++) setStyle(0,c, cellStyle('F2F2F2','1F3864',true,11,'left',false,''));
-  // Row 1: Grupos / áreas — azul marino oscuro
-  for (let c=0;c<nCols;c++) setStyle(1,c, cellStyle('1F3864','FFFFFF',true,10,'center',true,''));
-  // Row 2: Sub-encabezados (mediciones/segmentos) — salmón rosado
-  for (let c=0;c<nCols;c++) setStyle(2,c, cellStyle('F4B8C1','000000',false,9,'center',true,''));
+  // Header rows — fondo blanco/sin relleno, texto negro bold (como en referencia)
+  // Row 0: Título
+  for (let c=0;c<nCols;c++) setStyle(0,c, cellStyle('','000000',true,11,'left',false,''));
+  // Row 1: Grupos / áreas (segmentos)
+  for (let c=0;c<nCols;c++) setStyle(1,c, cellStyle('','000000',true,11,'center',true,''));
+  // Row 2: Sub-encabezados (mediciones)
+  for (let c=0;c<nCols;c++) setStyle(2,c, cellStyle('','000000',true,11,'center',true,''));
 
   // Data rows
-  let altFlag = false;
   const nRowFlags = rows[0]?.lowNFlags || [];
 
   for (let ri=0; ri<rows.length; ri++) {
@@ -6143,19 +6146,17 @@ function rBuildSheet(rows, colHeaders, title, groupBy) {
     let bg, fg, bold, numFmt, indent=0;
 
     if (rowType === 'N') {
-      bg='F2F2F2'; fg='C00000'; bold=true; numFmt='0'; altFlag=false;
+      bg='D9D9D9'; fg='000000'; bold=false; numFmt='0'; altFlag=false;
 
     } else if (rowType === 'dim') {
       currentDimLabel = rowLabel;
       currentSubdimLabel = '';
-      altFlag = false;
       const dc = DIM_COLORS[rowLabel] || { bg: C_DIM, fg: C_DIM_F };
       bg=dc.bg; fg=dc.fg; bold=true;
       numFmt = rowLabel === 'eNPS' ? '0"%"' : '0.00';
 
     } else if (rowType === 'subdim') {
       currentSubdimLabel = rowLabel;
-      altFlag = false;
       const sc = SUBDIM_COLORS[rowLabel];
       if (sc) { bg=sc.bg; fg=sc.fg; }
       else {
@@ -6168,12 +6169,10 @@ function rBuildSheet(rows, colHeaders, title, groupBy) {
       numFmt = isPctRow ? '0.0"%"' : '0.00';
 
     } else {
-      // Item row — tinte claro heredado de la dimensión actual (alternado)
+      // Item row — tinte claro fijo heredado de la dimensión (sin alternado, como en referencia)
       const parentLabel = currentDimLabel;
-      const tint = DIM_ITEM_TINTS[parentLabel] || 'F5F5F5';
-      bg = altFlag ? tint : 'FFFFFF';
-      altFlag = !altFlag;
-      fg='1A1916'; bold=false; numFmt='0.00'; indent=1;
+      bg = DIM_ITEM_TINTS[parentLabel] || 'FFFFFF';
+      fg='000000'; bold=false; numFmt='0.00'; indent=1;
     }
 
     // Label col
@@ -6190,15 +6189,16 @@ function rBuildSheet(rows, colHeaders, title, groupBy) {
     // Value cols
     for (let ci=0; ci<colHeaders.length; ci++) {
       const isLowN = rowType==='N' && nRowFlags[ci];
-      const cellBg = isLowN ? 'FFDCE0' : bg;
-      const cellFg = isLowN ? 'C00000' : fg;
+      const cellBg = bg;
+      const cellFg = isLowN ? 'FF0000' : fg;
       setStyle(excelRow, 2+ci, cellStyle(cellBg, cellFg, isLowN||bold, 9, 'center', false, numFmt));
     }
   }
 
-  // Column widths
-  ws['!cols'] = [{ wch:52 }, { wch:1 }, ...colHeaders.map(()=>({ wch:13 }))];
-  ws['!rows'] = [{ hpt:20 }, { hpt:32 }, { hpt:36 }];
+  // Column widths — col A: etiqueta amplia, col B: separador, cols C+: datos
+  ws['!cols'] = [{ wch:60 }, { wch:1 }, ...colHeaders.map(()=>({ wch:16 }))];
+  // Row heights — uniforme 16pt como referencia
+  ws['!rows'] = [{ hpt:16 }, { hpt:30 }, { hpt:30 }];
 
   // Ensure all value cells (cols 2+) are stored as numbers with 2 decimal places
   for (let ri = 3; ri < aoa.length; ri++) {
