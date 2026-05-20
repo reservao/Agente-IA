@@ -622,8 +622,15 @@ tr:hover td { background: var(--bg); }
         </div>
         <div class="dl-item">
           <div>
+            <div class="dl-title">Organigrama interactivo (HTML)</div>
+            <div class="dl-sub">Archivo HTML con animaciones, zoom, desplazamiento y tooltips · se abre directo en el navegador del cliente</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="s1DownloadOrgHtml()">⬇ Descargar HTML</button>
+        </div>
+        <div class="dl-item">
+          <div>
             <div class="dl-title">Reporte de validación</div>
-            <div class="dl-sub">Excel con errores de jefatura y referencias circulares</div>
+            <div class="dl-sub">Excel completo con todos los errores detectados, instrucciones de corrección y resumen ejecutivo para el cliente</div>
           </div>
           <button class="btn btn-secondary btn-sm" onclick="s1Download()">⬇ Descargar .xlsx</button>
         </div>
@@ -3535,55 +3542,363 @@ function s1RenderProblemsTable(r) {
 }
 
 // Descarga: reporte Sección 1
+// ─── DESCARGA HTML INTERACTIVO ────────────────────────────────────────────────
+function s1DownloadOrgHtml() {
+  const svgEl = document.getElementById('s1org-svg');
+  const g     = document.getElementById('s1org-g');
+  if (!svgEl || !g || !g.children.length) {
+    alert('El organigrama no está disponible. Asegúrate de llegar al paso 4 y que el árbol se haya generado.');
+    return;
+  }
+
+  // Serializar SVG completo
+  const serializer = new XMLSerializer();
+  const svgClone = svgEl.cloneNode(true);
+  // Eliminar atributos de tamaño para que sea fluido en el HTML
+  svgClone.removeAttribute('style');
+  svgClone.setAttribute('id', 'org-svg');
+  svgClone.setAttribute('style', 'width:100%;height:100%;display:block;');
+  const svgStr = serializer.serializeToString(svgClone);
+
+  // Construir leyenda HTML
+  const segEntries = Object.entries(S1_SEG_VALUE_TO_COLOR);
+  const hasLegend  = segEntries.length > 0;
+  const segLabel   = document.getElementById('s1-seg-select')
+    ? (document.getElementById('s1-seg-select').options[document.getElementById('s1-seg-select').selectedIndex]?.text || '')
+    : '';
+
+  let legendHtml = '';
+  if (hasLegend) {
+    const items = segEntries.map(([seg, color]) =>
+      `<div class="leg-item"><span class="leg-swatch" style="background:${color}"></span><span class="leg-label">${seg}</span></div>`
+    ).join('');
+    const anomNote = S1_ANOMALY_DETAILS.length
+      ? `<div class="leg-anomaly">⚠ ${S1_ANOMALY_DETAILS.length} persona${S1_ANOMALY_DETAILS.length > 1 ? 's' : ''} con segmento distinto a sus vecinos</div>`
+      : '';
+    legendHtml = `
+    <div class="legend-panel">
+      <div class="leg-title">Segmentación</div>
+      <div class="leg-col">${segLabel ? segLabel.replace(/ \(\d+ grupos\)/, '') : ''}</div>
+      ${items}
+      ${anomNote}
+    </div>`;
+  }
+
+  // Construir tabla de anomalías
+  let anomalyHtml = '';
+  if (S1_ANOMALY_DETAILS.length) {
+    const rows = S1_ANOMALY_DETAILS.map(a =>
+      `<tr><td>${a.id}</td><td><span class="badge-seg" style="background:${S1_SEG_VALUE_TO_COLOR[a.own]||'#999'}">${a.own}</span></td><td><span class="badge-seg" style="background:${S1_SEG_VALUE_TO_COLOR[a.majority]||'#999'}">${a.majority}</span></td><td style="text-align:center">${a.total}</td></tr>`
+    ).join('');
+    anomalyHtml = `
+    <div class="anomaly-section">
+      <div class="anom-title">⚠ Personas aisladas en segmentación</div>
+      <p class="anom-desc">Estas personas pertenecen a un segmento distinto al de la mayoría de sus vecinos directos (jefatura y/o subordinados). Aparecen con borde naranja pulsante en el organigrama.</p>
+      <table class="anom-table">
+        <thead><tr><th>ID / RUT</th><th>Segmento propio</th><th>Segmento mayoritario vecinos</th><th>Vecinos</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }
+
+  const filename = (S1.filename || 'organigrama').replace(/\.\w+$/, '') + '_organigrama.html';
+  const today = new Date().toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric' });
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Organigrama — ${S1.filename || 'Base'}</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"><\/script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',Arial,sans-serif;background:#F5F3EF;color:#1A1916;min-height:100vh;display:flex;flex-direction:column}
+.header{background:#1A1916;padding:.9rem 1.5rem;display:flex;align-items:center;justify-content:space-between}
+.header-title{color:#fff;font-size:15px;font-weight:600}
+.header-meta{color:#888;font-size:12px}
+.main{display:flex;flex:1;overflow:hidden;height:calc(100vh - 52px)}
+.legend-panel{width:200px;flex-shrink:0;background:#ECEAE4;border-right:1px solid #C8C4BC;padding:1.25rem 1rem;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+.leg-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6B6860;margin-bottom:2px}
+.leg-col{font-size:12px;font-weight:600;color:#1A1916;margin-bottom:6px;word-break:break-word}
+.leg-item{display:flex;align-items:center;gap:8px;font-size:12px;color:#1A1916;padding:3px 0}
+.leg-swatch{width:13px;height:13px;border-radius:3px;flex-shrink:0;border:1px solid rgba(0,0,0,.15)}
+.leg-label{word-break:break-word;line-height:1.3}
+.leg-anomaly{margin-top:8px;padding:6px 8px;background:#FFF3CD;border:1px solid #E8C94A;border-radius:5px;font-size:11px;color:#7A4A10;line-height:1.4}
+.org-wrap{flex:1;overflow:hidden;position:relative;background:#F9F8F5}
+#org-svg{width:100%;height:100%}
+.controls{position:absolute;top:10px;right:12px;display:flex;gap:6px;z-index:10}
+.ctrl-btn{padding:5px 12px;border:1px solid #C8C4BC;border-radius:5px;background:#fff;font-size:12px;cursor:pointer;font-family:'DM Sans',Arial,sans-serif;color:#1A1916}
+.ctrl-btn:hover{background:#ECEAE4}
+.footer{background:#fff;border-top:1px solid #D8D4CC;padding:.6rem 1.5rem;font-size:11px;color:#9B9890}
+.anomaly-section{padding:1.25rem 1.5rem;background:#fff;border-top:1px solid #D8D4CC}
+.anom-title{font-size:13px;font-weight:600;margin-bottom:.35rem;color:#7A4A10}
+.anom-desc{font-size:12px;color:#6B6860;margin-bottom:.75rem;line-height:1.5}
+.anom-table{width:100%;border-collapse:collapse;font-size:12px}
+.anom-table th{padding:6px 10px;text-align:left;font-size:11px;background:#ECEAE4;color:#6B6860;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #D8D4CC;font-weight:600}
+.anom-table td{padding:6px 10px;border-bottom:1px solid #F0EDE8}
+.badge-seg{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;color:#fff;font-weight:500}
+@keyframes anomaly-dash{to{stroke-dashoffset:-16}}
+#org-svg rect.anomaly-ring{animation:anomaly-dash 1.2s linear infinite}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-title">Organigrama — ${S1.filename || 'Base'}</div>
+  <div class="header-meta">Generado ${today} · Scroll para zoom · Arrastra para mover</div>
+</div>
+<div class="main">
+  ${legendHtml}
+  <div class="org-wrap" id="org-wrap">
+    <div class="controls">
+      <button class="ctrl-btn" onclick="zoomIn()">＋</button>
+      <button class="ctrl-btn" onclick="zoomOut()">－</button>
+      <button class="ctrl-btn" onclick="zoomReset()">⊙ Restablecer</button>
+    </div>
+    ${svgStr}
+  </div>
+</div>
+${anomalyHtml}
+<div class="footer">Organigrama generado con Analizador de Encuestas · Los datos se procesan localmente, ningún dato fue enviado a internet.</div>
+<script>
+(function(){
+  const svg = document.getElementById('org-svg');
+  if (!svg) return;
+  const inner = svg.querySelector('g');
+  if (!inner) return;
+  const zoom = d3.zoom().scaleExtent([0.05, 4]).on('zoom', e => {
+    inner.setAttribute('transform', e.transform);
+  });
+  d3.select(svg).call(zoom);
+  // Ajustar vista inicial al contenido
+  try {
+    const bb = inner.getBBox();
+    if (bb.width && bb.height) {
+      const W = svg.clientWidth  || 900;
+      const H = svg.clientHeight || 600;
+      const sc = Math.min(0.9, Math.min(W / (bb.width + 80), H / (bb.height + 80)));
+      const tx = W/2 - (bb.x + bb.width/2) * sc;
+      const ty = H/2 - (bb.y + bb.height/2) * sc;
+      d3.select(svg).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(sc));
+    }
+  } catch(e) {}
+  window.zoomIn    = () => d3.select(svg).call(zoom.scaleBy, 1.3);
+  window.zoomOut   = () => d3.select(svg).call(zoom.scaleBy, 0.77);
+  window.zoomReset = () => {
+    try {
+      const bb = inner.getBBox();
+      if (bb.width && bb.height) {
+        const W = svg.clientWidth  || 900;
+        const H = svg.clientHeight || 600;
+        const sc = Math.min(0.9, Math.min(W / (bb.width + 80), H / (bb.height + 80)));
+        const tx = W/2 - (bb.x + bb.width/2) * sc;
+        const ty = H/2 - (bb.y + bb.height/2) * sc;
+        d3.select(svg).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(sc));
+      }
+    } catch(e) {}
+  };
+})();
+<\/script>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+
+// ─── REPORTE DE VALIDACIÓN MEJORADO ───────────────────────────────────────────
 function s1Download() {
   const wb = XLSX.utils.book_new();
+  const today = new Date().toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric' });
 
-  // Hoja 1: Base de datos limpia (con los campos limpios aplicados)
+  // Helpers de nombres
+  const idColName      = (S1.colMap && S1.colMap['s1id'])       || '';
+  const nameColName    = (S1.colMap && S1.colMap['s1nombre'])   || '';
+  const apellidoColName= (S1.colMap && S1.colMap['s1apellido']) || '';
+  const idIdx    = idColName       ? S1.headers.indexOf(idColName)       : -1;
+  const nameIdx  = nameColName     ? S1.headers.indexOf(nameColName)     : -1;
+  const apIdx    = apellidoColName ? S1.headers.indexOf(apellidoColName) : -1;
+  const correoColName = (S1.colMap && S1.colMap['s1correo']) || '';
+  const correoIdx = correoColName ? S1.headers.indexOf(correoColName) : -1;
+
+  function getNameById(id) {
+    if (idIdx < 0 || !S1.rows) return '';
+    const row = S1.rows.find(r => String(r[idIdx] || '').trim() === String(id).trim());
+    if (!row) return '';
+    const nom = nameIdx >= 0 ? String(row[nameIdx] || '').trim() : '';
+    const ap  = apIdx   >= 0 ? String(row[apIdx]   || '').trim() : '';
+    return [nom, ap].filter(Boolean).join(' ');
+  }
+  function getNameByRow(ri) {
+    if (!S1.rows || !S1.rows[ri]) return '';
+    const row = S1.rows[ri];
+    const nom = nameIdx >= 0 ? String(row[nameIdx] || '').trim() : '';
+    const ap  = apIdx   >= 0 ? String(row[apIdx]   || '').trim() : '';
+    return [nom, ap].filter(Boolean).join(' ');
+  }
+
+  // ── Hoja 0: Portada / Resumen ejecutivo ─────────────────────────────────
+  const totalPersonas = S1.rows ? S1.rows.length : 0;
+  const colFaltantes  = S1.reqResult ? S1.reqResult.missing.length : 0;
+  const idDups        = S1.dupResult ? S1.dupResult.id.dups.length : 0;
+  const emailDups     = S1.dupResult ? S1.dupResult.email.dups.length : 0;
+  const emailInvalid  = S1.emailResult?.available ? S1.emailResult.invalid.length : 0;
+  const emailEmpty    = S1.emailResult?.available ? S1.emailResult.empty.length   : 0;
+  const orgNoMatch    = S1.orgResult?.available   ? S1.orgResult.noMatch.length   : 0;
+  const orgCycles     = S1.orgResult?.available   ? S1.orgResult.cycles.length    : 0;
+  const totalErrores  = colFaltantes + idDups + emailDups + emailInvalid + orgNoMatch + orgCycles;
+
+  const estado = totalErrores === 0 ? 'SIN ERRORES — Listo para cargar' :
+                 totalErrores <= 3  ? 'REVISAR — Errores menores detectados' :
+                                      'CORRECCIONES REQUERIDAS — Errores que impiden la carga';
+
+  const portada = [
+    ['REPORTE DE VALIDACIÓN DE BASE DE DATOS'],
+    [''],
+    ['Archivo analizado', S1.filename || '—'],
+    ['Fecha de validación', today],
+    ['Total de personas', totalPersonas],
+    [''],
+    ['RESUMEN EJECUTIVO'],
+    ['Estado general', estado],
+    ['Total de errores detectados', totalErrores],
+    [''],
+    ['DETALLE POR CATEGORÍA', 'Cantidad', 'Estado', 'Qué significa'],
+    ['Columnas faltantes',      colFaltantes, colFaltantes ? 'ERROR'   : 'OK', colFaltantes ? 'Faltan columnas obligatorias para cargar en plataforma' : 'Todas las columnas requeridas están presentes'],
+    ['IDs duplicados',          idDups,       idDups       ? 'ERROR'   : 'OK', idDups       ? 'Hay personas con el mismo identificador — la plataforma rechazará el archivo' : 'Todos los identificadores son únicos'],
+    ['Correos duplicados',      emailDups,    emailDups    ? 'AVISO'   : 'OK', emailDups    ? 'Hay correos repetidos — puede causar problemas de acceso en la plataforma' : 'Todos los correos son únicos'],
+    ['Correos con formato inválido', emailInvalid, emailInvalid ? 'AVISO' : 'OK', emailInvalid ? 'Correos mal escritos — las personas no recibirán la invitación' : 'Formato de correos correcto'],
+    ['Correos vacíos',          emailEmpty,   emailEmpty   ? 'AVISO'   : 'OK', emailEmpty   ? 'Personas sin correo — no podrán recibir la encuesta' : 'Todos tienen correo registrado'],
+    ['Jefaturas no encontradas',orgNoMatch,   orgNoMatch   ? 'ERROR'   : 'OK', orgNoMatch   ? 'El ID de jefatura de estas personas no existe en el archivo' : 'Todas las jefaturas apuntan a personas existentes'],
+    ['Referencias circulares',  orgCycles,    orgCycles    ? 'ERROR'   : 'OK', orgCycles    ? 'Hay cadenas de jefatura que se cierran sobre sí mismas (A jefa a B, B jefa a A)' : 'No hay ciclos en la jerarquía'],
+    [''],
+    ['INSTRUCCIONES PARA EL CLIENTE'],
+    ['1. Revisa cada hoja de este archivo con el nombre del error detectado.'],
+    ['2. Cada hoja indica exactamente qué persona tiene el problema y qué debes corregir.'],
+    ['3. Corrige el archivo original (.xlsx) y vuelve a enviarlo para una nueva validación.'],
+    ['4. Los errores marcados como ERROR son obligatorios de corregir antes de la carga.'],
+    ['5. Los marcados como AVISO son recomendados pero no bloquean la carga.'],
+  ];
+  const portadaWs = XLSX.utils.aoa_to_sheet(portada);
+  portadaWs['!cols'] = [{ wch: 32 }, { wch: 12 }, { wch: 10 }, { wch: 70 }];
+  XLSX.utils.book_append_sheet(wb, portadaWs, '📋 Resumen');
+
+  // ── Hoja 1: Base de datos limpia ─────────────────────────────────────────
   const cleanHeaders = [...S1.headers];
-  const cleanData = S1.rows.map(row => [...row]);
+  const cleanData    = S1.rows.map(row => [...row]);
   const cleanWs = XLSX.utils.aoa_to_sheet([cleanHeaders, ...cleanData]);
   cleanWs['!cols'] = cleanHeaders.map(() => ({ wch: 22 }));
   XLSX.utils.book_append_sheet(wb, cleanWs, 'Base Limpia');
 
-  // Hoja 2: Registro de campos limpiados (si los hay)
+  // ── Hoja 2: Campos limpiados ──────────────────────────────────────────────
   if (S1.cleanLog.length) {
-    const logRows = [['Fila','Columna','Valor original','Valor limpio'],
-      ...S1.cleanLog.map(x => [x.ri, x.col, x.original, x.cleaned])];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(logRows), 'Campos Limpiados');
+    const logRows = [
+      ['Fila', 'Columna', 'Nombre persona', 'Valor original', 'Valor corregido', 'Nota'],
+      ...S1.cleanLog.map(x => [
+        x.ri + 2,
+        x.col,
+        getNameByRow(x.ri),
+        x.original,
+        x.cleaned,
+        'Corregido automáticamente al cargar el archivo'
+      ])
+    ];
+    const logWs = XLSX.utils.aoa_to_sheet(logRows);
+    logWs['!cols'] = [{ wch: 6 }, { wch: 20 }, { wch: 28 }, { wch: 22 }, { wch: 22 }, { wch: 50 }];
+    XLSX.utils.book_append_sheet(wb, logWs, 'Campos Corregidos');
   }
 
-  const sum = [['Validación','Resultado']];
-  if (S1.reqResult) {
-    sum.push(['Columnas encontradas', S1.reqResult.found.length]);
-    sum.push(['Columnas faltantes', S1.reqResult.missing.length]);
-    S1.reqResult.missing.forEach(m => sum.push(['  Faltante: '+m.label, '—']));
+  // ── Hoja: IDs Duplicados ──────────────────────────────────────────────────
+  if (S1.dupResult?.id.dups.length) {
+    const rows = [
+      ['ID duplicado', 'Nombre persona', 'Filas en el archivo', 'Qué corregir'],
+      ...S1.dupResult.id.dups.map(d => [
+        d.val,
+        getNameById(d.val),
+        d.rows.map(r => r + 2).join(', '),
+        'Este ID aparece ' + d.rows.length + ' veces. Verifica si son personas distintas y asigna un ID único a cada una, o elimina la fila duplicada.'
+      ])
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 20 }, { wch: 70 }];
+    XLSX.utils.book_append_sheet(wb, ws, '❌ IDs Duplicados');
   }
-  if (S1.dupResult) {
-    sum.push(['IDs duplicados', S1.dupResult.id.dups.length]);
-    sum.push(['Correos duplicados', S1.dupResult.email.dups.length]);
+
+  // ── Hoja: Correos Duplicados ──────────────────────────────────────────────
+  if (S1.dupResult?.email.dups.length) {
+    const rows = [
+      ['Correo duplicado', 'Filas en el archivo', 'Qué corregir'],
+      ...S1.dupResult.email.dups.map(d => [
+        d.val,
+        d.rows.map(r => r + 2).join(', '),
+        'Este correo está asignado a ' + d.rows.length + ' personas. Cada persona debe tener un correo único para recibir su invitación.'
+      ])
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 36 }, { wch: 20 }, { wch: 70 }];
+    XLSX.utils.book_append_sheet(wb, ws, '⚠ Correos Duplicados');
   }
-  if (S1.emailResult?.available) {
-    sum.push(['Correos con formato inválido', S1.emailResult.invalid.length]);
-    sum.push(['Correos vacíos', S1.emailResult.empty.length]);
+
+  // ── Hoja: Correos con Problemas ───────────────────────────────────────────
+  if (S1.emailResult?.available && (S1.emailResult.invalid.length || S1.emailResult.empty.length)) {
+    const rows = [
+      ['Fila', 'ID / RUT', 'Nombre persona', 'Correo registrado', 'Problema', 'Qué corregir'],
+      ...S1.emailResult.invalid.map(x => {
+        const id = idIdx >= 0 && S1.rows[x.ri] ? String(S1.rows[x.ri][idIdx] || '') : '';
+        return [x.ri + 2, id, getNameByRow(x.ri), x.val, 'Formato inválido', 'El correo no tiene el formato correcto (usuario@dominio.com). Corrígelo en el archivo.'];
+      }),
+      ...S1.emailResult.empty.map(x => {
+        const id = idIdx >= 0 && S1.rows[x.ri] ? String(S1.rows[x.ri][idIdx] || '') : '';
+        return [x.ri + 2, id, getNameByRow(x.ri), '(vacío)', 'Sin correo', 'Esta persona no tiene correo registrado. Sin correo, no recibirá la encuesta.'];
+      })
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 6 }, { wch: 16 }, { wch: 28 }, { wch: 36 }, { wch: 20 }, { wch: 65 }];
+    XLSX.utils.book_append_sheet(wb, ws, '⚠ Correos con Problemas');
   }
+
+  // ── Hojas: Errores de organigrama ─────────────────────────────────────────
   if (S1.orgResult?.available) {
-    sum.push(['Jefaturas no encontradas', S1.orgResult.noMatch.length]);
-    sum.push(['Referencias circulares', S1.orgResult.cycles.length]);
+    if (S1.orgResult.noMatch.length) {
+      const rows = [
+        ['ID / RUT persona', 'Nombre persona', 'ID jefatura ingresado', 'Nombre jefatura (si existe)', 'Problema', 'Qué corregir'],
+        ...S1.orgResult.noMatch.map(x => [
+          x.id,
+          getNameById(x.id),
+          x.jef,
+          getNameById(x.jef) || '(no existe en el archivo)',
+          'Jefatura no encontrada',
+          'El ID "' + x.jef + '" no existe en la columna de identificadores. Verifica si hay errores tipográficos o si falta agregar a esa persona al archivo.'
+        ])
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 20 }, { wch: 28 }, { wch: 25 }, { wch: 70 }];
+      XLSX.utils.book_append_sheet(wb, ws, '❌ Jefaturas Inexistentes');
+    }
+    if (S1.orgResult.cycles.length) {
+      const rows = [
+        ['Ciclo detectado', 'Personas involucradas', 'Qué corregir'],
+        ...S1.orgResult.cycles.map(c => {
+          const names = c.map(id => { const n = getNameById(id); return n ? id + ' (' + n + ')' : id; });
+          return [
+            c.join(' → ') + ' → ' + c[0],
+            names.join(' → '),
+            'Hay una cadena circular de jefaturas. Revisa cuál persona tiene asignada su jefatura incorrectamente y corrígela para romper el ciclo.'
+          ];
+        })
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [{ wch: 40 }, { wch: 50 }, { wch: 70 }];
+      XLSX.utils.book_append_sheet(wb, ws, '❌ Referencias Circulares');
+    }
   }
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), 'Resumen');
-  if (S1.dupResult?.id.dups.length)
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['ID Duplicado','Filas'],...S1.dupResult.id.dups.map(d=>[d.val,d.rows.map(r=>r+2).join(', ')])]), 'IDs Duplicados');
-  if (S1.dupResult?.email.dups.length)
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Correo Duplicado','Filas'],...S1.dupResult.email.dups.map(d=>[d.val,d.rows.map(r=>r+2).join(', ')])]), 'Correos Duplicados');
-  if (S1.emailResult?.available && (S1.emailResult.invalid.length||S1.emailResult.empty.length))
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Fila','Valor','Problema'],...S1.emailResult.invalid.map(x=>[x.ri+2,x.val,'Formato inválido']),...S1.emailResult.empty.map(x=>[x.ri+2,'','Vacío'])]), 'Correos con Problemas');
-  if (S1.orgResult?.available) {
-    if (S1.orgResult.noMatch.length)
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['ID Persona','ID Jefatura'],...S1.orgResult.noMatch.map(x=>[x.id,x.jef])]), 'Jefaturas Inexistentes');
-    if (S1.orgResult.cycles.length)
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Ciclo detectado'],...S1.orgResult.cycles.map(c=>[c.join(' → ')])]), 'Referencias Circulares');
-  }
-  XLSX.writeFile(wb, S1.filename.replace(/\.\w+$/,'') + '_reporte_previo.xlsx');
+
+  XLSX.writeFile(wb, S1.filename.replace(/\.\w+$/, '') + '_reporte_validacion.xlsx');
 }
 
 function goSection(n) {
