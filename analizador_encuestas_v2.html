@@ -5809,67 +5809,78 @@ function rBuildRows(groups) {
   nRow.lowNFlags = groups.map(g => g.rows.length > 0 && g.rows.length < 5);
   out.push(nRow);
 
+  // helper: check if a row has at least one non-null value beyond the label columns
+  function hasData(row) { return row.slice(2).some(v => v !== null && v !== undefined); }
+
   for (const dim of R_DIMS) {
-    const dimRow = [`Promedio ${dim.nombre}`, 'dim',
-      ...groups.map(g => {
-        const v = g.rows.length ? rDimMean(g.rows, dim) : null;
-        return v !== null ? +parseFloat(v).toFixed(2) : null;
-      })];
-    out.push(dimRow);
+    const dimVals = groups.map(g => {
+      const v = g.rows.length ? rDimMean(g.rows, dim) : null;
+      return v !== null ? +parseFloat(v).toFixed(2) : null;
+    });
+    // Skip entire dimension block if no group has data
+    if (dimVals.every(v => v === null)) continue;
+
+    out.push([`Promedio ${dim.nombre}`, 'dim', ...dimVals]);
+
     if (dim.sub) {
       for (const sub of dim.sub) {
-        const subRow = [sub.nombre, 'subdim',
-          ...groups.map(g => g.rows.length ? rMean(g.rows, sub.cols[0]) : null)];
-        out.push(subRow);
-        for (const [qc, ql] of sub.items) {
-          out.push([ql, 'item', ...groups.map(g => g.rows.length ? rMean(g.rows, qc) : null)]);
+        const subVals = groups.map(g => g.rows.length ? rMean(g.rows, sub.cols[0]) : null);
+        if (subVals.some(v => v !== null)) {
+          out.push([sub.nombre, 'subdim', ...subVals]);
+          for (const [qc, ql] of sub.items) {
+            const itemVals = groups.map(g => g.rows.length ? rMean(g.rows, qc) : null);
+            if (itemVals.some(v => v !== null)) out.push([ql, 'item', ...itemVals]);
+          }
         }
       }
     }
     if (dim.items) {
       for (const [qc, ql] of dim.items) {
-        out.push([ql, 'item', ...groups.map(g => g.rows.length ? rMean(g.rows, qc) : null)]);
+        const itemVals = groups.map(g => g.rows.length ? rMean(g.rows, qc) : null);
+        if (itemVals.some(v => v !== null)) out.push([ql, 'item', ...itemVals]);
       }
     }
   }
 
   // ── eNPS al final ──────────────────────────────────────────────────────
-  // Detect eNPS tag column
-  const enpsTagIdx = R.headers.findIndex(h => /enps_tag|enps tag/i.test(h));
+  // Detect eNPS tag column (ENPS_CAT, ENPS_TAG, etc.)
+  const enpsTagIdx = R.headers.findIndex(h => /enps_cat|enps_tag|enps tag/i.test(h));
   if (enpsTagIdx >= 0) {
     // eNPS score row
     const enpsRow = ['eNPS', 'dim', ...groups.map(g => {
       if (!g.rows.length) return null;
       const tags = g.rows.map(r => String(r[enpsTagIdx]||'').trim()).filter(Boolean);
       if (!tags.length) return null;
-      const promo = tags.filter(t => t === 'Promotor').length;
-      const detr  = tags.filter(t => t === 'Detractor').length;
+      const isPromo = t => /^promotor/i.test(t);
+      const isDetr  = t => /^detractor/i.test(t);
+      const promo = tags.filter(isPromo).length;
+      const detr  = tags.filter(isDetr).length;
       return +((promo - detr) / tags.length * 100).toFixed(2);
     })];
     out.push(enpsRow);
 
     // Promotores %
-    out.push(['Promotores', 'subdim', ...groups.map(g => {
+    out.push(['% Promotores', 'subdim', ...groups.map(g => {
       if (!g.rows.length) return null;
       const tags = g.rows.map(r => String(r[enpsTagIdx]||'').trim()).filter(Boolean);
       if (!tags.length) return null;
-      return +(tags.filter(t => t === 'Promotor').length / tags.length * 100).toFixed(2);
+      return +(tags.filter(t => /^promotor/i.test(t)).length / tags.length * 100).toFixed(2);
     })]);
 
     // Neutros %
-    out.push(['Neutros', 'subdim', ...groups.map(g => {
+    out.push(['% Neutros', 'subdim', ...groups.map(g => {
       if (!g.rows.length) return null;
       const tags = g.rows.map(r => String(r[enpsTagIdx]||'').trim()).filter(Boolean);
       if (!tags.length) return null;
-      return +(tags.filter(t => t === 'Neutro').length / tags.length * 100).toFixed(2);
+      return +(tags.filter(t => /^neutro/i.test(t)).length / tags.length * 100).toFixed(2);
     })]);
 
     // Detractores %
-    out.push(['Detractores', 'subdim', ...groups.map(g => {
+    out.push(['% Detractores', 'subdim', ...groups.map(g => {
       if (!g.rows.length) return null;
       const tags = g.rows.map(r => String(r[enpsTagIdx]||'').trim()).filter(Boolean);
       if (!tags.length) return null;
-      return +(tags.filter(t => t === 'Detractor').length / tags.length * 100).toFixed(2);
+      return +(tags.filter(t => /^detractor/i.test(t)).length / tags.length * 100).toFixed(2);
     })]);
   }
 
