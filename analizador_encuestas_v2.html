@@ -2467,7 +2467,6 @@ const S1_REQ = [
   { id:'s1id',        label:'ID / Identificador', kw:['id','identificador','rut','dni','cedula','numerodeidentificacion','cod','codigo'] },
   { id:'s1nombre',    label:'Nombre',              kw:['nombre','name','nombres','primernom','primer_nom'] },
   { id:'s1apellido',  label:'Apellido Paterno',    kw:['apellidopaterno','apellido_paterno','paterno','apellido','lastname','surname','apellidos'] },
-  { id:'s1nombrecomp',label:'Nombre Completo',     kw:['nombrecompleto','nombre_completo','nombreyapellido','fullname','nombre_apellido'] },
   { id:'s1correo', label:'Correo / Email',       kw:['correo','email','mail','emailaddress','correoelectronico'] },
   { id:'s1jef',    label:'ID Jefatura',          kw:['idjefatura','jefatura','idjefe','jefe','manager','supervisor','reporta'] },
   { id:'s1gen',    label:'Género',               kw:['genero','gender','sexo'] },
@@ -2790,7 +2789,7 @@ function s1PopulateSegSelector() {
   S1.headers.forEach((h, idx) => {
     if (h === idColName || h === jefColName) return;
     const vals = new Set(S1.rows.map(r => String(r[idx]||'').trim()).filter(Boolean));
-    if (vals.size >= 2 && vals.size <= 30) {
+    if (vals.size >= 2 && vals.size <= 60) {
       const opt = document.createElement('option');
       opt.value = h;
       opt.textContent = h + ' (' + vals.size + ' grupos)';
@@ -2866,28 +2865,20 @@ function s1DrawOrg(orgResult) {
   const W = document.getElementById('s1org-container').offsetWidth || 800;
   const H = 560;
   // Altura extra cuando hay nombres disponibles
-  const idColNameOrg   = (S1.colMap && S1.colMap['s1id'])        || '';
-  const nameColName    = (S1.colMap && S1.colMap['s1nombre'])    || '';
-  const apellidoColName= (S1.colMap && S1.colMap['s1apellido'])  || '';
-  const fullNameCol    = (S1.colMap && S1.colMap['s1nombrecomp'])|| '';
-  const idIdxOrg   = idColNameOrg    ? S1.headers.indexOf(idColNameOrg)    : -1;
-  const nameIdx    = nameColName     ? S1.headers.indexOf(nameColName)     : -1;
-  const apIdx      = apellidoColName ? S1.headers.indexOf(apellidoColName) : -1;
-  const fullIdx    = fullNameCol     ? S1.headers.indexOf(fullNameCol)     : -1;
+  const idColNameOrg    = (S1.colMap && S1.colMap['s1id'])       || '';
+  const nameColName     = (S1.colMap && S1.colMap['s1nombre'])   || '';
+  const apellidoColName = (S1.colMap && S1.colMap['s1apellido']) || '';
+  const idIdxOrg  = idColNameOrg    ? S1.headers.indexOf(idColNameOrg)    : -1;
+  const nameIdx   = nameColName     ? S1.headers.indexOf(nameColName)     : -1;
+  const apIdx     = apellidoColName ? S1.headers.indexOf(apellidoColName) : -1;
   const idToName = {};
   if (idIdxOrg >= 0 && S1.rows) {
     S1.rows.forEach(row => {
-      const id = String(row[idIdxOrg] || '').trim();
+      const id  = String(row[idIdxOrg] || '').trim();
       if (!id) return;
-      // Prioridad: nombre completo > nombre+apellido > nombre solo
-      let displayName = '';
-      if (fullIdx >= 0) {
-        displayName = String(row[fullIdx] || '').trim();
-      } else {
-        const nom = nameIdx >= 0 ? String(row[nameIdx] || '').trim() : '';
-        const ap  = apIdx   >= 0 ? String(row[apIdx]   || '').trim() : '';
-        displayName = [nom, ap].filter(Boolean).join(' ');
-      }
+      const nom = nameIdx >= 0 ? String(row[nameIdx] || '').trim() : '';
+      const ap  = apIdx   >= 0 ? String(row[apIdx]   || '').trim() : '';
+      const displayName = [nom, ap].filter(Boolean).join(' ');
       if (displayName) idToName[id] = displayName;
     });
   }
