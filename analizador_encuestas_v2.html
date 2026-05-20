@@ -4294,7 +4294,7 @@ function rcMean(rows, col) {
 }
 
 function rcSpecialVal(rows, special) {
-  const tagIdx = RC.headers.findIndex(h => /enps_tag/i.test(h));
+  const tagIdx = RC.headers.findIndex(h => /enps_cat|enps_tag|enps.tag/i.test(h));
   if (tagIdx < 0) return null;
   const tags = rows.map(r => String(r[tagIdx]||'').trim()).filter(Boolean);
   if (!tags.length) return null;
@@ -4335,9 +4335,11 @@ function rcProcess(wb, filename) {
   RC.rows = json.slice(1).filter(r => r.some(c => c !== ''));
   RC.filename = filename;
 
-  const medIdx = RC.headers.findIndex(h => rcNorm(h).includes('medicion'));
-  if (medIdx >= 0) {
-    RC.medCol = RC.headers[medIdx];
+  // Detección de medición con keywords extendidas (igual que rProcess)
+  const rcMedCol = rFindCol(['medicion','measurement','periodo','year','año','mes','month','ola','wave'], RC.headers);
+  if (rcMedCol) {
+    const medIdx = RC.headers.indexOf(rcMedCol);
+    RC.medCol = rcMedCol;
     RC._singleMed = false;
     const medCount = {};
     RC.rows.forEach(r => {
@@ -4376,7 +4378,7 @@ function rcProcess(wb, filename) {
 
   // Variable checkboxes — show known vars that exist + any unknown numeric columns
   const availableVars = RC_VARS.filter(v => {
-    if (v.special) return RC.headers.some(h => /enps_tag/i.test(h));
+    if (v.special) return RC.headers.some(h => /enps_cat|enps_tag|enps.tag/i.test(h));
     return rColIdxFuzzy(v.col) >= 0;
   });
 
@@ -4757,6 +4759,30 @@ const RCP_DEFS = [
   },
 ];
 
+// ── Alias map expandido con variantes en español, inglés y nombres de plataforma ──
+const RCP_COL_ALIASES = {
+  'WORK_ENGAGEMENT':  ['workengagement','engagement','engd9','eng','trabajo_engagement','promedio_engagement','promedio engagement'],
+  'EXHAUSTION':       ['exhaustion','agotamiento','burnout','exhaust','promedio_agotamiento','promedio agotamiento'],
+  'VIGOR':            ['vigor','promedio_vigor','promedio vigor','vigord'],
+  'DEDICATION':       ['dedication','dedicacion','promedio_dedicacion','promedio dedicacion'],
+  'ABSORTION':        ['absortion','absorption','absorcion','promedio_absorcion','promedio absorcion'],
+  'VIGOR_BINARY':     ['vigorbinary','altovigor','alto_vigor','alto vigor','high_vigor'],
+  'EXHAUSTED_BYNARY': ['exhaustedbynary','exhaustedbinary','altoagotamiento','alto_agotamiento','alto agotamiento','high_exhaustion'],
+  'SELF_EFFICACY':    ['selfefficacy','autoeficacia','auto_eficacia','promedio_autoeficacia','promedio autoeficacia'],
+  'OPTIMISM':         ['optimism','optimismo','promedio_optimismo','promedio optimismo'],
+  'OPPORTUNITIES_FOR_DEVELOPMENT': ['opportunitiesfordevelopment','opportunities','oportunidades','oppor','oportunidades_de_desarrollo','promedio_oportunidades','promedio oportunidades'],
+  'COACH':            ['coach','coaching','promedio_coaching','promedio coaching','coaching_del_lider','coaching del lider'],
+  'FEEDBACK':         ['feedback','retroalimentacion','promedio_retroalimentacion','promedio retroalimentacion'],
+  'SOCIAL_SUPPORT':   ['socialsupport','colaboracion','apoyo_social','promedio_colaboracion','promedio colaboracion'],
+  'AUTONOMY':         ['autonomy','autonomia','promedio_autonomia','promedio autonomia'],
+  'WORK_PRESSURE':    ['workpressure','presion','presion_en_el_trabajo','promedio_presion','promedio presion'],
+  'COGNITIVE_DEMANDS':['cognitivedemands','cognitivas','demandas_cognitivas','promedio_demandas_cognitivas'],
+  'EMOTIONAL_DEMANDS':['emotionaldemands','emocionales','demandas_emocionales','promedio_demandas_emocionales'],
+  'ROLE_CONFLICT':    ['roleconflict','conflicto','conflicto_de_rol','promedio_conflicto','promedio conflicto'],
+  'HASSLES':          ['hassles','trabas','trabas_en_el_trabajo','promedio_trabas','promedio trabas'],
+  'eNPS_tag':         ['enpstag','enpscategoria','enpscat','enps_cat','enps_tag','enps tag','enps_categoria'],
+};
+
 // Colores de la paleta principal
 const RCP_COLORS = {
   engagement:  { bg:'rgba(27,63,110,0.85)',   border:'#1B3F6E' },
@@ -4773,31 +4799,10 @@ const RCP_COLORS = {
 function rcpNorm(s) {
   return String(s).toLowerCase()
     .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
-    .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u').replace(/ñ/g,'n').trim();
+    .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u').replace(/ñ/g,'n')
+    .replace(/[^a-z0-9_ ]/g,'').trim();
 }
-// ── Alias map + fuzzy lookup ───────────────────────────────────────────────
-const RCP_COL_ALIASES = {
-  'WORK_ENGAGEMENT':  ['workengagement','engagement','engd9','eng'],
-  'EXHAUSTION':       ['exhaustion','agotamiento','burnout','exhaust'],
-  'VIGOR':            ['vigor'],
-  'DEDICATION':       ['dedication','dedicacion'],
-  'ABSORTION':        ['absortion','absorption','absorcion'],
-  'VIGOR_BINARY':     ['vigorbinary','altovigor'],
-  'EXHAUSTED_BYNARY': ['exhaustedbynary','exhaustedbinary','altoagotamiento'],
-  'SELF_EFFICACY':    ['selfefficacy','autoeficacia'],
-  'OPTIMISM':         ['optimism','optimismo'],
-  'OPPORTUNITIES_FOR_DEVELOPMENT': ['opportunitiesfordevelopment','opportunities','oportunidades','oppor'],
-  'COACH':            ['coach','coaching'],
-  'FEEDBACK':         ['feedback','retroalimentacion'],
-  'SOCIAL_SUPPORT':   ['socialsupport','colaboracion'],
-  'AUTONOMY':         ['autonomy','autonomia'],
-  'WORK_PRESSURE':    ['workpressure','presion'],
-  'COGNITIVE_DEMANDS':['cognitivedemands','cognitivas'],
-  'EMOTIONAL_DEMANDS':['emotionaldemands','emocionales'],
-  'ROLE_CONFLICT':    ['roleconflict','conflicto'],
-  'HASSLES':          ['hassles','trabas'],
-  'eNPS_tag':         ['enpstag','enpscategoria','enpscat'],
-};
+// RCP_COL_ALIASES ya está definido arriba junto a RCP_COLORS (versión expandida)
 
 function colAliasLookup(nc, headers, normFn) {
   var idx = headers.findIndex(function(h) {
@@ -4823,10 +4828,23 @@ function rcpColIdx(col) {
 }
 
 function rcpColIdxFuzzy(col) {
+  // Nivel 1: exacto
   var idx = rcpColIdx(col);
-  if(idx>=0) return idx;
-  var nc = rcpNorm(col).replace(/_/g,'');
-  return colAliasLookup(nc, RCP.headers, rcpNorm);
+  if (idx >= 0) return idx;
+  // Nivel 2: alias table (variantes de plataforma y español)
+  var nc = rcpNorm(col).replace(/_/g,'').replace(/ /g,'');
+  idx = colAliasLookup(nc, RCP.headers, rcpNorm);
+  if (idx >= 0) return idx;
+  // Nivel 3: fuzzy — el encabezado contiene el nombre como parte de su token
+  // Maneja formatos como "(WE1-1.5)", "Promedio Engagement", "WORK_ENGAGEMENT_D9"
+  return RCP.headers.findIndex(h => {
+    var nh = rcpNorm(h).replace(/_/g,'').replace(/ /g,'');
+    if (nh === nc) return true;
+    var parts = h.split(/[-_()\s.]/);
+    if (parts.some(p => rcpNorm(p).replace(/_/g,'') === nc)) return true;
+    if (nh.startsWith(nc) || nh.endsWith(nc)) return true;
+    return false;
+  });
 }
 function rcpMean(rows, col) {
   const idx = rcpColIdxFuzzy(col);
@@ -4842,6 +4860,7 @@ function rcpDimMean(rows, dimCol, itemCols) {
 }
 
 function rcpRowsByMed(med) {
+  if (RCP._singleMed || RCP.medCol === '__single__') return RCP.rows;
   const idx = rcpColIdx(RCP.medCol);
   if (idx < 0) return RCP.rows;
   return RCP.rows.filter(r=>String(r[idx]).trim()===med);
@@ -4863,21 +4882,33 @@ function rcpProcess(wb, filename) {
   RCP.headers=json[0].map(String);
   RCP.rows=json.slice(1).filter(r=>r.some(c=>c!==''));
   RCP.filename=filename;
-  const medIdx=RCP.headers.findIndex(h=>rcpNorm(h).includes('medicion'));
-  RCP.medCol=medIdx>=0 ? RCP.headers[medIdx] : RCP.headers[0];
-  const safemedIdx=medIdx>=0 ? medIdx : 0;
+
+  // Detección de medición con keywords extendidas → centinela __single__ si no hay
+  const rcpMedColName = rFindCol(['medicion','measurement','periodo','year','año','mes','month','ola','wave'], RCP.headers);
   const mc={};
-  RCP.rows.forEach(r=>{const m=String(r[safemedIdx]||'').trim();if(m)mc[m]=(mc[m]||0)+1;});
-  RCP.mediciones=Object.keys(mc).sort();
+  if (rcpMedColName) {
+    const medIdx = RCP.headers.indexOf(rcpMedColName);
+    RCP.medCol = rcpMedColName;
+    RCP._singleMed = false;
+    RCP.rows.forEach(r=>{const m=String(r[medIdx]||'').trim();if(m)mc[m]=(mc[m]||0)+1;});
+    RCP.mediciones = Object.keys(mc).sort();
+  } else {
+    RCP.medCol = '__single__';
+    RCP._singleMed = true;
+    mc['Medición única'] = RCP.rows.length;
+    RCP.mediciones = ['Medición única'];
+  }
 
   document.getElementById('rcp-fname').textContent=filename;
-  document.getElementById('rcp-fmeta').textContent=RCP.rows.length+' personas · '+RCP.mediciones.length+' mediciones';
+  document.getElementById('rcp-fmeta').textContent = rcpMedColName
+    ? RCP.rows.length+' personas · '+RCP.mediciones.length+' mediciones (columna: '+rcpMedColName+')'
+    : RCP.rows.length+' personas · medición única (sin columna de período)';
 
   // Build cards for available charts
   const cards = RCP_DEFS.map((def,i) => {
     // Check if required columns exist (use fuzzy matching for non-standard column names)
     const available = def.requiere.every(col => {
-      if(col==='eNPS_tag') return RCP.headers.some(h=>/enps_tag/i.test(h));
+      if(col==='eNPS_tag') return RCP.headers.some(h=>/enps_cat|enps_tag|enps.tag/i.test(h));
       return rcpColIdxFuzzy(col)>=0;
     });
     const onclickAttr = available ? 'rcpSelectDef(' + i + ')' : '';
@@ -4919,13 +4950,14 @@ function renderRcpParams() {
   const def = RCP.currentDef;
   const medOpts = RCP.mediciones.map(m=>`<option value="${m}">${m}</option>`).join('');
 
-  // Find classification columns
+  // Find classification columns — excluir columna de medición y columnas de dimensiones
   const claCols = RCP.headers.filter((h,idx)=>{
+    if (RCP.medCol !== '__single__' && h === RCP.medCol) return false;
     const uniq=new Set(RCP.rows.map(r=>String(r[idx]||'').trim()).filter(Boolean));
     return uniq.size>=2 && uniq.size<=40 &&
-      !['MEDICION','Empresa','Sector','Pais'].includes(h) &&
       !/^(WE|EX|SE|wp|cogn|soc|emo|feedb|rolcon|hassle|coach|oppor|auto|optim)\d+$/i.test(h) &&
-      !/^(WORK|EXHAUST|SELF|OPTIM|VIGOR|ABSORT|DEDIC|SOCIAL|EMOTION|FEED|ROLE|HASS|COACH|OPPORT|AUTONOMY|COGNITIVE|ENGAGEMENT_|EXHAUSTED|INTENT|OPTIM|RIESGO|TOTAL|CRIT|AON|eNPS_)/i.test(h);
+      !/^(WORK|EXHAUST|SELF|OPTIM|VIGOR|ABSORT|DEDIC|SOCIAL|EMOTION|FEED|ROLE|HASS|COACH|OPPORT|AUTONOMY|COGNITIVE|ENGAGEMENT_|EXHAUSTED|INTENT|RIESGO|TOTAL|CRIT|AON|eNPS_|RUT|ID_|NOMBRE|EMAIL|FECHA)/i.test(h) &&
+      !/^(medicion|measurement|periodo|year|año|mes|month|ola|wave)/i.test(rcpNorm(h));
   });
   const claOpts = claCols.map(c=>`<option value="${c}">${c}</option>`).join('');
 
