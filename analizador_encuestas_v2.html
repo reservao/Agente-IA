@@ -3584,25 +3584,55 @@ function s1DownloadOrgHtml() {
     </div>`;
   }
 
-  // Construir tabla de jefaturas inexistentes
+  // Helpers de nombre compartidos para tablas del HTML
+  const _hmIdColName     = (S1.colMap && S1.colMap['s1id'])       || '';
+  const _hmNameColName   = (S1.colMap && S1.colMap['s1nombre'])   || '';
+  const _hmApColName     = (S1.colMap && S1.colMap['s1apellido']) || '';
+  const _hmIdIdx    = _hmIdColName   ? S1.headers.indexOf(_hmIdColName)   : -1;
+  const _hmNameIdx  = _hmNameColName ? S1.headers.indexOf(_hmNameColName) : -1;
+  const _hmApIdx    = _hmApColName   ? S1.headers.indexOf(_hmApColName)   : -1;
+  const _hmJefColName = (S1.orgResult?.available && S1.orgResult.jefCol) || '';
+  const _hmJefIdx   = _hmJefColName  ? S1.headers.indexOf(_hmJefColName)  : -1;
+  function _hmGetName(id) {
+    if (_hmIdIdx < 0 || !S1.rows) return '';
+    const row = S1.rows.find(r => String(r[_hmIdIdx] || '').trim() === String(id).trim());
+    if (!row) return '';
+    const n = _hmNameIdx >= 0 ? String(row[_hmNameIdx] || '').trim() : '';
+    const a = _hmApIdx   >= 0 ? String(row[_hmApIdx]   || '').trim() : '';
+    return [n, a].filter(Boolean).join(' ');
+  }
+
+  // Construir tabla de personas sin jefatura asignada (campo vacío)
+  let noJefHtml = '';
+  if (S1.orgResult?.available && _hmIdIdx >= 0 && _hmJefIdx >= 0) {
+    const sinJef = S1.rows.filter(row => {
+      const id  = String(row[_hmIdIdx]  ?? '').trim();
+      const jef = String(row[_hmJefIdx] ?? '').trim();
+      return id && !jef;
+    });
+    if (sinJef.length) {
+      const sjRows = sinJef.map(row => {
+        const id     = String(row[_hmIdIdx] || '').trim();
+        const nombre = _hmGetName(id);
+        return `<tr><td style="font-weight:600">${id}</td><td>${nombre || '—'}</td><td style="color:#8B2020">Campo vacío — debe asignarse una jefatura</td></tr>`;
+      }).join('');
+      noJefHtml = `
+    <div class="anomaly-section" style="background:#FFF8F8;border-top:1px solid #E8BABA">
+      <div class="anom-title" style="color:#8B2020">❌ Personas sin jefatura asignada (${sinJef.length})</div>
+      <p class="anom-desc">Estas personas tienen el campo de jefatura vacío. Toda persona debe tener una jefatura asignada para que el organigrama sea válido.</p>
+      <table class="anom-table">
+        <thead><tr><th>ID / RUT persona</th><th>Nombre</th><th>Problema</th></tr></thead>
+        <tbody>${sjRows}</tbody>
+      </table>
+    </div>`;
+    }
+  }
+
+  // Construir tabla de jefaturas inexistentes (ID no encontrado en el archivo)
   let noMatchHtml = '';
   if (S1.orgResult?.available && S1.orgResult.noMatch.length) {
-    const idColName2     = (S1.colMap && S1.colMap['s1id'])       || '';
-    const nameColName2   = (S1.colMap && S1.colMap['s1nombre'])   || '';
-    const apellidoColName2 = (S1.colMap && S1.colMap['s1apellido']) || '';
-    const idIdx2    = idColName2       ? S1.headers.indexOf(idColName2)       : -1;
-    const nameIdx2  = nameColName2     ? S1.headers.indexOf(nameColName2)     : -1;
-    const apIdx2    = apellidoColName2 ? S1.headers.indexOf(apellidoColName2) : -1;
-    function nmGetName(id) {
-      if (idIdx2 < 0 || !S1.rows) return '';
-      const row = S1.rows.find(r => String(r[idIdx2] || '').trim() === String(id).trim());
-      if (!row) return '';
-      const n = nameIdx2 >= 0 ? String(row[nameIdx2] || '').trim() : '';
-      const a = apIdx2   >= 0 ? String(row[apIdx2]   || '').trim() : '';
-      return [n, a].filter(Boolean).join(' ');
-    }
     const nmRows = S1.orgResult.noMatch.map(x => {
-      const nombre = nmGetName(x.id);
+      const nombre = _hmGetName(x.id);
       return `<tr><td style="font-weight:600">${x.id}</td><td>${nombre || '—'}</td><td style="color:#8B2020;font-weight:600">${x.jef}</td></tr>`;
     }).join('');
     noMatchHtml = `
@@ -3691,6 +3721,7 @@ body{font-family:'DM Sans',Arial,sans-serif;background:#F5F3EF;color:#1A1916;min
     ${svgStr}
   </div>
 </div>
+${noJefHtml}
 ${noMatchHtml}
 ${anomalyHtml}
 <div class="footer">Organigrama generado con Analizador de Encuestas · Los datos se procesan localmente, ningún dato fue enviado a internet.</div>
