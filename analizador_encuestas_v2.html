@@ -3584,15 +3584,47 @@ function s1DownloadOrgHtml() {
     </div>`;
   }
 
-  // Construir tabla de anomalías
+  // Construir tabla de jefaturas inexistentes
+  let noMatchHtml = '';
+  if (S1.orgResult?.available && S1.orgResult.noMatch.length) {
+    const idColName2     = (S1.colMap && S1.colMap['s1id'])       || '';
+    const nameColName2   = (S1.colMap && S1.colMap['s1nombre'])   || '';
+    const apellidoColName2 = (S1.colMap && S1.colMap['s1apellido']) || '';
+    const idIdx2    = idColName2       ? S1.headers.indexOf(idColName2)       : -1;
+    const nameIdx2  = nameColName2     ? S1.headers.indexOf(nameColName2)     : -1;
+    const apIdx2    = apellidoColName2 ? S1.headers.indexOf(apellidoColName2) : -1;
+    function nmGetName(id) {
+      if (idIdx2 < 0 || !S1.rows) return '';
+      const row = S1.rows.find(r => String(r[idIdx2] || '').trim() === String(id).trim());
+      if (!row) return '';
+      const n = nameIdx2 >= 0 ? String(row[nameIdx2] || '').trim() : '';
+      const a = apIdx2   >= 0 ? String(row[apIdx2]   || '').trim() : '';
+      return [n, a].filter(Boolean).join(' ');
+    }
+    const nmRows = S1.orgResult.noMatch.map(x => {
+      const nombre = nmGetName(x.id);
+      return `<tr><td style="font-weight:600">${x.id}</td><td>${nombre || '—'}</td><td style="color:#8B2020;font-weight:600">${x.jef}</td></tr>`;
+    }).join('');
+    noMatchHtml = `
+    <div class="anomaly-section" style="background:#FFF8F8;border-top:1px solid #E8BABA">
+      <div class="anom-title" style="color:#8B2020">❌ Personas con jefatura inexistente (${S1.orgResult.noMatch.length})</div>
+      <p class="anom-desc">El ID de jefatura de estas personas no corresponde a ninguna persona registrada en el archivo. Deben corregirse antes de la carga.</p>
+      <table class="anom-table">
+        <thead><tr><th>ID / RUT persona</th><th>Nombre</th><th>ID jefatura (no encontrado)</th></tr></thead>
+        <tbody>${nmRows}</tbody>
+      </table>
+    </div>`;
+  }
+
+  // Construir tabla de anomalías de segmentación
   let anomalyHtml = '';
   if (S1_ANOMALY_DETAILS.length) {
     const rows = S1_ANOMALY_DETAILS.map(a =>
-      `<tr><td>${a.id}</td><td><span class="badge-seg" style="background:${S1_SEG_VALUE_TO_COLOR[a.own]||'#999'}">${a.own}</span></td><td><span class="badge-seg" style="background:${S1_SEG_VALUE_TO_COLOR[a.majority]||'#999'}">${a.majority}</span></td><td style="text-align:center">${a.total}</td></tr>`
+      `<tr><td>${a.id}</td><td><span class="badge-seg" style="background:${S1_SEG_VALUE_TO_COLOR[a.ownSeg]||'#999'}">${a.ownSeg}</span></td><td><span class="badge-seg" style="background:${S1_SEG_VALUE_TO_COLOR[a.neighborSeg]||'#999'}">${a.neighborSeg}</span></td><td style="text-align:center">${a.neighborCount}</td></tr>`
     ).join('');
     anomalyHtml = `
     <div class="anomaly-section">
-      <div class="anom-title">⚠ Personas aisladas en segmentación</div>
+      <div class="anom-title">⚠ Personas aisladas en segmentación (${S1_ANOMALY_DETAILS.length})</div>
       <p class="anom-desc">Estas personas pertenecen a un segmento distinto al de la mayoría de sus vecinos directos (jefatura y/o subordinados). Aparecen con borde naranja pulsante en el organigrama.</p>
       <table class="anom-table">
         <thead><tr><th>ID / RUT</th><th>Segmento propio</th><th>Segmento mayoritario vecinos</th><th>Vecinos</th></tr></thead>
@@ -3659,6 +3691,7 @@ body{font-family:'DM Sans',Arial,sans-serif;background:#F5F3EF;color:#1A1916;min
     ${svgStr}
   </div>
 </div>
+${noMatchHtml}
 ${anomalyHtml}
 <div class="footer">Organigrama generado con Analizador de Encuestas · Los datos se procesan localmente, ningún dato fue enviado a internet.</div>
 <script>
