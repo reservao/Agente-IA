@@ -5388,9 +5388,10 @@ function rcpGenerate() {
               ctx.fillText(val.toFixed(2), bx, barTopY - 2);
             }
             if(pct === null || pct === undefined || !y2Scale) continue;
-            // Pill position: proportional on y2, clamped inside bar
-            var rawCY = y2Scale.getPixelForValue(parseFloat(pct));
-            var dotCY = Math.max(barTopY + pillH/2 + 2, Math.min(barBottom - pillH/2 - 2, rawCY));
+            // Pill: proportional on y2, floor at 20% (never overlaps score label), clamped inside bar
+            var rawCY  = y2Scale.getPixelForValue(parseFloat(pct));
+            var floorY = y2Scale.getPixelForValue(20);
+            var dotCY  = Math.max(barTopY + pillH/2 + 2, Math.min(rawCY, floorY));
             // Measure text for pill width
             ctx.font = '600 '+(pillH < 18 ? 8 : 10)+'px "DM Sans", sans-serif';
             var txt = pct+'%';
