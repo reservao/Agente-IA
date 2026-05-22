@@ -5169,9 +5169,11 @@ function rcpGenerate() {
 
     const mainCol  = isEng ? 'WORK_ENGAGEMENT' : 'EXHAUSTION';
     const binaryCol= isEng ? 'VIGOR_BINARY'    : 'EXHAUSTED_BYNARY';
-    const barColor = isEng ? 'rgba(179,157,219,0.85)' : 'rgba(248,187,208,0.85)';
-    const barBorder= isEng ? '#7B61C4'  : '#E91E8C';
-    const dotColor = isEng ? '#1565C0'  : '#C62828';
+    const barColor = isEng ? '#1B3F6E' : '#A8442B';
+    const barTop   = isEng ? 'rgba(27,63,110,0.98)' : 'rgba(168,68,43,0.98)';
+    const barBot   = isEng ? 'rgba(27,63,110,0.78)' : 'rgba(168,68,43,0.78)';
+    const dotColor = isEng ? '#0F2A4D' : '#6E2916';
+    const dotGlow  = isEng ? 'rgba(27,63,110,0.10)' : 'rgba(168,68,43,0.10)';
     const yMin     = isEng ? 0 : 1;
     const yMax     = isEng ? 6 : 4;
     const label    = isEng ? 'Engagement' : 'Agotamiento';
@@ -5280,8 +5282,18 @@ function rcpGenerate() {
         datasets: [
           {
             label, data: avgVals,
-            backgroundColor: barColor, borderColor: barBorder,
-            borderWidth: 0, borderRadius: 4, order: 1,
+            backgroundColor: (c) => {
+              if (!c.chart.chartArea) return barColor;
+              const g = c.chart.ctx.createLinearGradient(0, c.chart.chartArea.top, 0, c.chart.chartArea.bottom);
+              g.addColorStop(0, barTop); g.addColorStop(1, barBot);
+              return g;
+            },
+            borderWidth: 0,
+            borderRadius: { topLeft: 10, topRight: 10, bottomLeft: 0, bottomRight: 0 },
+            borderSkipped: false,
+            categoryPercentage: 0.84,
+            barPercentage: 0.78,
+            order: 1,
           },
           ...benchDatasets
         ]
@@ -5300,7 +5312,7 @@ function rcpGenerate() {
               return v !== null ? label+': '+v?.toFixed(2)+' | Alto '+label+': '+(binaryPct[ctx.dataIndex]||'—')+'% (N='+n+')' : 'N='+n+' (bajo mínimo)';
             }
           }},
-          rcpFloatingDot: { binaryPct, dotColor, isEng, nPerGroup }
+          rcpFloatingDot: { binaryPct, dotColor, dotGlow, isEng, nPerGroup }
         },
         scales: {
           x: {
@@ -5333,7 +5345,7 @@ function rcpGenerate() {
       },
       plugins: [{
         id: 'rcpFloatingDot',
-        afterDraw(chart) {
+        afterDatasetsDraw(chart) {
           var ctx = chart.ctx;
           var data = chart.data;
           var chartArea = chart.chartArea;
@@ -5343,41 +5355,84 @@ function rcpGenerate() {
           var meta    = chart.getDatasetMeta(0);
           var nBars   = meta.data.length;
           var valFontSize = nBars > 15 ? 9 : (nBars > 8 ? 11 : 13);
-          var dotR    = nBars > 15 ? 14 : (nBars > 8 ? 17 : 20);
+          var pillH   = nBars > 15 ? 16 : (nBars > 8 ? 19 : 22);
+          var pillPad = pillH * 0.55;
           ctx.save();
+          // track pill Y positions for anti-collision
+          var pillYs = [];
           for(var i=0; i<meta.data.length; i++) {
             var bar = meta.data[i];
             var val = data.datasets[0].data[i];
             var pct = plugin.binaryPct[i];
             var n   = plugin.nPerGroup ? plugin.nPerGroup[i] : null;
             var bx  = bar.x;
+            // N label below x-axis
             if(n !== null && n !== undefined) {
-              ctx.fillStyle = 'rgba(80,80,80,0.9)'; ctx.font = '9px Arial';
+              ctx.fillStyle = 'rgba(80,80,80,0.75)';
+              ctx.font = '9px "DM Mono", monospace';
               ctx.textAlign = 'center'; ctx.textBaseline = 'top';
               ctx.fillText('N='+n, bx, chartArea.bottom + 8);
             }
-            if(val === null || val === undefined) continue;
+            if(val === null || val === undefined) { pillYs.push(null); continue; }
+            // Value label inside bar
             var barBottom = yScale.getPixelForValue(plugin.isEng ? 0 : 1);
-            var barTop    = bar.y;
-            var barHeight = barBottom - barTop;
+            var barTopY   = bar.y;
+            var barHeight = barBottom - barTopY;
             if(barHeight > 25) {
-              ctx.fillStyle = 'white'; ctx.font = 'bold '+valFontSize+'px Arial';
+              ctx.fillStyle = 'rgba(255,255,255,0.92)';
+              ctx.font = '600 '+valFontSize+'px "DM Sans", sans-serif';
               ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
               ctx.fillText(val.toFixed(2), bx, barBottom - 5);
             } else {
-              ctx.fillStyle = '#444'; ctx.font = 'bold '+valFontSize+'px Arial';
+              ctx.fillStyle = plugin.dotColor;
+              ctx.font = '600 '+valFontSize+'px "DM Sans", sans-serif';
               ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-              ctx.fillText(val.toFixed(2), bx, barTop - 2);
+              ctx.fillText(val.toFixed(2), bx, barTopY - 2);
             }
-            if(pct === null || pct === undefined || !y2Scale) continue;
-            var dotCY = y2Scale.getPixelForValue(parseFloat(pct));
-            var minDotCY = y2Scale.getPixelForValue(20);
-            if(dotCY > minDotCY) dotCY = minDotCY;
-            ctx.beginPath(); ctx.arc(bx, dotCY, dotR, 0, Math.PI*2);
-            ctx.fillStyle = plugin.dotColor; ctx.fill();
-            ctx.fillStyle = 'white'; ctx.font = 'bold '+(dotR<16?8:10)+'px Arial';
+            if(pct === null || pct === undefined || !y2Scale) { pillYs.push(null); continue; }
+            // Pill position: floor at 20% on y2
+            var rawCY = y2Scale.getPixelForValue(parseFloat(pct));
+            var minCY = y2Scale.getPixelForValue(20);
+            var dotCY = rawCY < minCY ? rawCY : minCY;
+            // Anti-collision: push up if overlaps previous pill
+            for(var j=0; j<pillYs.length; j++) {
+              if(pillYs[j] !== null && Math.abs(pillYs[j] - dotCY) < pillH + 2) {
+                dotCY = pillYs[j] - pillH - 2;
+              }
+            }
+            pillYs.push(dotCY);
+            // Measure text for pill width
+            ctx.font = '600 '+(pillH < 18 ? 8 : 10)+'px "DM Sans", sans-serif';
+            var txt = pct+'%';
+            var tw  = ctx.measureText(txt).width;
+            var pw  = tw + pillPad * 2;
+            var pr  = pillH / 2;
+            // Halo
+            ctx.beginPath();
+            var haloR = pr + 4;
+            ctx.arc(bx, dotCY, haloR, 0, Math.PI*2);
+            ctx.fillStyle = plugin.dotGlow || 'rgba(0,0,0,0.08)';
+            ctx.fill();
+            // Pill background (rounded rect)
+            var px = bx - pw/2;
+            var py = dotCY - pillH/2;
+            ctx.beginPath();
+            ctx.moveTo(px + pr, py);
+            ctx.lineTo(px + pw - pr, py);
+            ctx.arcTo(px + pw, py, px + pw, py + pillH, pr);
+            ctx.lineTo(px + pw, py + pillH - pr);
+            ctx.arcTo(px + pw, py + pillH, px + pw - pr, py + pillH, pr);
+            ctx.lineTo(px + pr, py + pillH);
+            ctx.arcTo(px, py + pillH, px, py + pillH - pr, pr);
+            ctx.lineTo(px, py + pr);
+            ctx.arcTo(px, py, px + pr, py, pr);
+            ctx.closePath();
+            ctx.fillStyle = plugin.dotColor;
+            ctx.fill();
+            // Pill text
+            ctx.fillStyle = 'white';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText(pct+'%', bx, dotCY);
+            ctx.fillText(txt, bx, dotCY);
           }
           ctx.restore();
         }
