@@ -5358,8 +5358,6 @@ function rcpGenerate() {
           var pillH   = nBars > 15 ? 16 : (nBars > 8 ? 19 : 22);
           var pillPad = pillH * 0.55;
           ctx.save();
-          // track pill Y positions for anti-collision
-          var pillYs = [];
           for(var i=0; i<meta.data.length; i++) {
             var bar = meta.data[i];
             var val = data.datasets[0].data[i];
@@ -5382,25 +5380,17 @@ function rcpGenerate() {
             ctx.textAlign = 'center';
             if(barHeight > 25) {
               ctx.fillStyle = 'rgba(255,255,255,0.92)';
-              ctx.textBaseline = 'top';
-              ctx.fillText(val.toFixed(2), bx, barTopY + 6);
+              ctx.textBaseline = 'bottom';
+              ctx.fillText(val.toFixed(2), bx, barBottom - 5);
             } else {
               ctx.fillStyle = plugin.dotColor;
               ctx.textBaseline = 'bottom';
               ctx.fillText(val.toFixed(2), bx, barTopY - 2);
             }
-            if(pct === null || pct === undefined || !y2Scale) { pillYs.push(null); continue; }
-            // Pill position: floor at 20% on y2
+            if(pct === null || pct === undefined || !y2Scale) continue;
+            // Pill position: proportional on y2, clamped inside bar
             var rawCY = y2Scale.getPixelForValue(parseFloat(pct));
-            var minCY = y2Scale.getPixelForValue(20);
-            var dotCY = rawCY < minCY ? rawCY : minCY;
-            // Anti-collision: push up if overlaps previous pill
-            for(var j=0; j<pillYs.length; j++) {
-              if(pillYs[j] !== null && Math.abs(pillYs[j] - dotCY) < pillH + 2) {
-                dotCY = pillYs[j] - pillH - 2;
-              }
-            }
-            pillYs.push(dotCY);
+            var dotCY = Math.max(barTopY + pillH/2 + 2, Math.min(barBottom - pillH/2 - 2, rawCY));
             // Measure text for pill width
             ctx.font = '600 '+(pillH < 18 ? 8 : 10)+'px "DM Sans", sans-serif';
             var txt = pct+'%';
