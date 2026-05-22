@@ -5371,7 +5371,7 @@ function rcpGenerate() {
               ctx.textAlign = 'center'; ctx.textBaseline = 'top';
               ctx.fillText('N='+n, bx, chartArea.bottom + 8);
             }
-            if(val === null || val === undefined) { pillYs.push(null); continue; }
+            if(val === null || val === undefined) continue;
             // Value label inside bar
             var barBottom = yScale.getPixelForValue(plugin.isEng ? 0 : 1);
             var barTopY   = bar.y;
