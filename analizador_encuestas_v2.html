@@ -5378,15 +5378,15 @@ function rcpGenerate() {
             var barBottom = yScale.getPixelForValue(plugin.isEng ? 0 : 1);
             var barTopY   = bar.y;
             var barHeight = barBottom - barTopY;
+            ctx.font = '600 '+valFontSize+'px "DM Sans", sans-serif';
+            ctx.textAlign = 'center';
             if(barHeight > 25) {
               ctx.fillStyle = 'rgba(255,255,255,0.92)';
-              ctx.font = '600 '+valFontSize+'px "DM Sans", sans-serif';
-              ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-              ctx.fillText(val.toFixed(2), bx, barBottom - 5);
+              ctx.textBaseline = 'top';
+              ctx.fillText(val.toFixed(2), bx, barTopY + 6);
             } else {
               ctx.fillStyle = plugin.dotColor;
-              ctx.font = '600 '+valFontSize+'px "DM Sans", sans-serif';
-              ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+              ctx.textBaseline = 'bottom';
               ctx.fillText(val.toFixed(2), bx, barTopY - 2);
             }
             if(pct === null || pct === undefined || !y2Scale) { pillYs.push(null); continue; }
