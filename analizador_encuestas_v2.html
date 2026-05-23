@@ -4729,8 +4729,9 @@ const RCP_DEFS = [
     params: [
       { id:'med',       tipo:'med_single',   label:'Medición a analizar' },
       { id:'seg',       tipo:'seg_col_rd',   label:'Filtrar por clasificación (opcional)' },
-      { id:'comp_med',  tipo:'med_opt',      label:'Comparativo en barras grises (medición)' },
-      { id:'comp_line', tipo:'comp_rd_line', label:'Línea comparativa (promedio org u otro segmento)' },
+      { id:'comp_med',  tipo:'med_opt',         label:'Medición del comparativo (barras grises)' },
+      { id:'comp_seg',  tipo:'seg_col_rd_comp', label:'Filtrar comparativo por clasificación (opcional)' },
+      { id:'comp_line', tipo:'comp_rd_line',    label:'Línea comparativa (promedio org u otro segmento)' },
     ]
   },
   {
@@ -5046,6 +5047,19 @@ function renderRcpParams() {
           </select>
         </div>
       </div>`;
+    } else if(p.tipo==='seg_col_rd_comp') {
+      html += `<div style="display:flex;flex-direction:column;gap:6px">
+        <select id="rcp_comp_seg" onchange="rcpSegRdCompChanged()"
+          style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
+          <option value="">— Organización completa —</option>
+          ${claOpts}
+        </select>
+        <div id="rcp_comp_seg_val_wrap" style="display:none">
+          <select id="rcp_comp_seg_val"
+            style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
+          </select>
+        </div>
+      </div>`;
     } else if(p.tipo==='med_opt') {
       html += `<select id="rcp_${p.id}"
         style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
@@ -5178,6 +5192,19 @@ function rcpSegRdChanged() {
   const segEl  = document.getElementById('rcp_seg');
   const wrapEl = document.getElementById('rcp_seg_val_wrap');
   const valEl  = document.getElementById('rcp_seg_val');
+  if(!segEl || !wrapEl || !valEl) return;
+  const col = segEl.value;
+  if(!col) { wrapEl.style.display='none'; valEl.innerHTML=''; return; }
+  const colIdx = RCP.headers.indexOf(col);
+  const vals = [...new Set(RCP.rows.map(r=>String(r[colIdx]||'').trim()).filter(Boolean))].sort();
+  valEl.innerHTML = vals.map(v=>`<option value="${v}">${v}</option>`).join('');
+  wrapEl.style.display = 'block';
+}
+
+function rcpSegRdCompChanged() {
+  const segEl  = document.getElementById('rcp_comp_seg');
+  const wrapEl = document.getElementById('rcp_comp_seg_val_wrap');
+  const valEl  = document.getElementById('rcp_comp_seg_val');
   if(!segEl || !wrapEl || !valEl) return;
   const col = segEl.value;
   if(!col) { wrapEl.style.display='none'; valEl.innerHTML=''; return; }
@@ -5597,9 +5624,16 @@ function rcpGenerate() {
     }];
 
     if(hasComp) {
-      const compRows = rcpRowsByMed(compMed);
+      const compSeg    = rcpGetParam('comp_seg') || '';
+      const compSegVal = rcpGetParam('comp_seg_val') || '';
+      let compRows = rcpRowsByMed(compMed);
+      if(compSeg && compSegVal) {
+        const cIdx = RCP.headers.indexOf(compSeg);
+        if(cIdx >= 0) compRows = compRows.filter(r => String(r[cIdx]||'').trim() === compSegVal);
+      }
+      const compLabel = compSegVal ? (compSeg+': '+compSegVal+' ('+compMed+')') : compMed;
       datasets.push({
-        label: compMed,
+        label: compLabel,
         data: dims.map(d=>{ const v=rcpMean(compRows,d.col); return v!==null?+v.toFixed(3):null; }),
         backgroundColor: 'rgba(170,170,170,0.65)', borderColor: 'rgba(130,130,130,0.8)',
         borderWidth: 0, borderRadius: {topLeft:4,topRight:4,bottomLeft:0,bottomRight:0},
