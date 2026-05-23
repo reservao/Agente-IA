@@ -5456,7 +5456,32 @@ function rcpGenerate() {
        borderColor:RCP_COLORS.agotamiento.border, backgroundColor:'transparent',
        pointBackgroundColor:RCP_COLORS.agotamiento.border, borderWidth:2.5, tension:0.3, pointRadius:5},
     ];
-    chartCfg = { type:'line', data:{labels,datasets:ds}, options: rcpBaseOptions(def.nombre, false, {min:0,max:6}) };
+    chartCfg = {
+      type: 'line',
+      data: { labels, datasets: ds },
+      options: rcpBaseOptions(def.nombre, false, {min:0,max:6}),
+      plugins: [{
+        id: 'linePointLabels',
+        afterDatasetsDraw(chart) {
+          const ctx = chart.ctx;
+          chart.data.datasets.forEach((dataset, di) => {
+            const meta = chart.getDatasetMeta(di);
+            if (meta.hidden) return;
+            meta.data.forEach((pt, i) => {
+              const val = dataset.data[i];
+              if (val === null || val === undefined) return;
+              ctx.save();
+              ctx.font = '600 11px "DM Sans", sans-serif';
+              ctx.fillStyle = dataset.borderColor || '#333';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'bottom';
+              ctx.fillText(typeof val === 'number' ? val.toFixed(2) : val, pt.x, pt.y - 8);
+              ctx.restore();
+            });
+          });
+        }
+      }]
+    };
 
   } else if(def.id==='recursos_demandas') {
     const med1=rcpGetParam('med1'), med2=rcpGetParam('med2');
