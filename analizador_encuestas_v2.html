@@ -3981,11 +3981,18 @@ function rGoSub(sub) {
 
 let R = { headers:[], rows:[], filename:'', mediciones:[], selectedMeds:[] };
 
-function rNorm(s) {
+// ─── SHARED UTILITY FUNCTIONS ──────────────────────────────────────────────
+function normalize(s) {
   return String(s).toLowerCase()
     .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
     .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u').replace(/ñ/g,'n')
     .replace(/[^a-z0-9_ ]/g,'').trim();
+}
+// Aliases for backward compatibility within each section
+function rNorm(s) { return normalize(s); }
+
+function detectMedicionCol(headers) {
+  return rFindCol(['medicion','measurement','periodo','year','año','mes','month','ola','wave'], headers);
 }
 
 function rFindCol(keywords, headers) {
@@ -4011,7 +4018,7 @@ function rProcess(wb, filename) {
   R.filename = filename;
 
   // Detect measurement column — solo por palabras clave; si no hay, medición única
-  const medCol = rFindCol(['medicion','measurement','periodo','year','año','mes','month','ola','wave'], R.headers);
+  const medCol = detectMedicionCol(R.headers);
   let medCount = {};
   if (medCol) {
     const medIdx = R.headers.indexOf(medCol);
@@ -4267,11 +4274,7 @@ const RC_VARS = [
   { label:'% Detractores',  col:'eNPS_detr',    special:'enps_detr' },
 ];
 
-function rcNorm(s) {
-  return String(s).toLowerCase()
-    .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
-    .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u').replace(/ñ/g,'n').trim();
-}
+function rcNorm(s) { return normalize(s); }
 
 function rcColIdx(col) {
   return RC.headers.findIndex(h => h === col || rcNorm(h) === rcNorm(col));
@@ -4334,7 +4337,7 @@ function rcProcess(wb, filename) {
   RC.filename = filename;
 
   // Detección de medición con keywords extendidas (igual que rProcess)
-  const rcMedCol = rFindCol(['medicion','measurement','periodo','year','año','mes','month','ola','wave'], RC.headers);
+  const rcMedCol = detectMedicionCol(RC.headers);
   if (rcMedCol) {
     const medIdx = RC.headers.indexOf(rcMedCol);
     RC.medCol = rcMedCol;
@@ -4772,12 +4775,7 @@ const RCP_COLORS = {
   detractor:   { bg:'rgba(192,57,43,0.85)',    border:'#C0392B' },
 };
 
-function rcpNorm(s) {
-  return String(s).toLowerCase()
-    .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
-    .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u').replace(/ñ/g,'n')
-    .replace(/[^a-z0-9_ ]/g,'').trim();
-}
+function rcpNorm(s) { return normalize(s); }
 // RCP_COL_ALIASES ya está definido arriba junto a RCP_COLORS (versión expandida)
 
 function colAliasLookup(nc, headers, normFn) {
