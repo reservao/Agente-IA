@@ -4722,13 +4722,15 @@ const RCP_DEFS = [
   {
     id: 'recursos_demandas',
     nombre: 'Recursos y Demandas',
-    desc: 'Barras horizontales con todas las dimensiones JDR comparando 2 mediciones',
+    desc: 'Columnas por dimensión JDR con segmentación y comparativo',
     icono: '▬',
     tipo: 'bar',
-    requiere: ['WORK_ENGAGEMENT','EXHAUSTION','SELF_EFFICACY','OPTIMISM'],
+    requiere: ['SELF_EFFICACY','OPTIMISM'],
     params: [
-      { id:'med1', tipo:'med_single', label:'Medición 1 (referencia)' },
-      { id:'med2', tipo:'med_single', label:'Medición 2 (comparación)' }
+      { id:'med',       tipo:'med_single',   label:'Medición a analizar' },
+      { id:'seg',       tipo:'seg_col_rd',   label:'Filtrar por clasificación (opcional)' },
+      { id:'comp_med',  tipo:'med_opt',      label:'Comparativo en barras grises (medición)' },
+      { id:'comp_line', tipo:'comp_rd_line', label:'Línea comparativa (promedio org u otro segmento)' },
     ]
   },
   {
@@ -5031,6 +5033,37 @@ function renderRcpParams() {
         <option value="">— Solo por medición —</option>
         ${claOpts}
       </select>`;
+    } else if(p.tipo==='seg_col_rd') {
+      html += `<div style="display:flex;flex-direction:column;gap:6px">
+        <select id="rcp_seg" onchange="rcpSegRdChanged()"
+          style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
+          <option value="">— Organización completa —</option>
+          ${claOpts}
+        </select>
+        <div id="rcp_seg_val_wrap" style="display:none">
+          <select id="rcp_seg_val"
+            style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
+          </select>
+        </div>
+      </div>`;
+    } else if(p.tipo==='med_opt') {
+      html += `<select id="rcp_${p.id}"
+        style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
+        <option value="">— Sin comparativo —</option>
+        ${medOpts}
+      </select>`;
+    } else if(p.tipo==='comp_rd_line') {
+      const segLineOpts = claCols.length ? '<optgroup label="Por segmento">' +
+        claCols.map(c=>{
+          const vals=[...new Set(RCP.rows.map(r=>String(r[RCP.headers.indexOf(c)]||'').trim()).filter(Boolean))].sort();
+          return vals.map(v=>`<option value="seg:${c}::${v}">${c}: ${v}</option>`).join('');
+        }).join('') + '</optgroup>' : '';
+      html += `<select id="rcp_${p.id}"
+        style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
+        <option value="">— Sin línea —</option>
+        <optgroup label="Por medición">${RCP.mediciones.map(m=>`<option value="med:${m}">Promedio org: ${m}</option>`).join('')}</optgroup>
+        ${segLineOpts}
+      </select>`;
     }
     html += '</div>';
   }
@@ -5134,6 +5167,19 @@ function rcpGetBenchLines(mainCol, itemsMap) {
     if(value !== null) lines.push({ value, color, label, dashed });
   }
   return lines;
+}
+
+function rcpSegRdChanged() {
+  const segEl  = document.getElementById('rcp_seg');
+  const wrapEl = document.getElementById('rcp_seg_val_wrap');
+  const valEl  = document.getElementById('rcp_seg_val');
+  if(!segEl || !wrapEl || !valEl) return;
+  const col = segEl.value;
+  if(!col) { wrapEl.style.display='none'; valEl.innerHTML=''; return; }
+  const colIdx = RCP.headers.indexOf(col);
+  const vals = [...new Set(RCP.rows.map(r=>String(r[colIdx]||'').trim()).filter(Boolean))].sort();
+  valEl.innerHTML = vals.map(v=>`<option value="${v}">${v}</option>`).join('');
+  wrapEl.style.display = 'block';
 }
 
 function rcpGetParam(id) {
@@ -5514,15 +5560,136 @@ function rcpGenerate() {
     };
 
   } else if(def.id==='recursos_demandas') {
-    const med1=rcpGetParam('med1'), med2=rcpGetParam('med2');
-    const meds=[med1,med2].filter(Boolean);
-    const labels=ALL_DIMS.map(d=>d.label);
-    const colors=[RCP_COLORS.azul1, RCP_COLORS.azul2];
-    const ds = meds.map((m,mi)=>({
-      label:m, data:ALL_DIMS.map(d=>rcpMean(rcpRowsByMed(m),d.col)),
-      backgroundColor:colors[mi%2].bg, borderColor:colors[mi%2].border, borderWidth:1.5
-    }));
-    chartCfg = rcpBarChart(labels, ds, def.nombre, true, {min:1,max:5});
+    const med      = rcpGetParam('med') || (RCP.mediciones[RCP.mediciones.length-1]);
+    const segCol   = rcpGetParam('seg') || '';
+    const segVal   = rcpGetParam('seg_val') || '';
+    const compMed  = rcpGetParam('comp_med') || '';
+    const compLine = rcpGetParam('comp_line') || '';
+
+    // Only recurso + demanda (exclude resultado: engagement, agotamiento)
+    const dims = ALL_DIMS.filter(d => d.tipo === 'recurso' || d.tipo === 'demanda');
+    const labels = dims.map(d => d.label);
+
+    // Main rows
+    let mainRows = rcpRowsByMed(med);
+    if(segCol && segVal) {
+      const segIdx = RCP.headers.indexOf(segCol);
+      if(segIdx >= 0) mainRows = mainRows.filter(r => String(r[segIdx]||'').trim() === segVal);
+    }
+    const mainLabel = segVal ? (segCol+': '+segVal) : med;
+
+    // Color per dimension type
+    const barBg     = dims.map(d => d.tipo==='recurso' ? 'rgba(27,63,110,0.85)' : 'rgba(168,68,43,0.85)');
+    const barBorder = dims.map(d => d.tipo==='recurso' ? 'rgba(27,63,110,1)'    : 'rgba(168,68,43,1)');
+    const hasComp   = !!compMed;
+
+    const datasets = [{
+      label: mainLabel,
+      data: dims.map(d=>{ const v=rcpMean(mainRows,d.col); return v!==null?+v.toFixed(3):null; }),
+      backgroundColor: barBg, borderColor: barBorder, borderWidth: 0,
+      borderRadius: {topLeft:6,topRight:6,bottomLeft:0,bottomRight:0}, borderSkipped: false,
+      categoryPercentage: 0.82, barPercentage: hasComp ? 0.48 : 0.72, order: 2,
+    }];
+
+    if(hasComp) {
+      const compRows = rcpRowsByMed(compMed);
+      datasets.push({
+        label: compMed,
+        data: dims.map(d=>{ const v=rcpMean(compRows,d.col); return v!==null?+v.toFixed(3):null; }),
+        backgroundColor: 'rgba(170,170,170,0.65)', borderColor: 'rgba(130,130,130,0.8)',
+        borderWidth: 0, borderRadius: {topLeft:4,topRight:4,bottomLeft:0,bottomRight:0},
+        borderSkipped: false, categoryPercentage: 0.82, barPercentage: 0.48, order: 3,
+      });
+    }
+
+    if(compLine) {
+      let lineRows, lineLabel;
+      if(compLine.startsWith('med:')) {
+        lineRows = rcpRowsByMed(compLine.slice(4));
+        lineLabel = compLine.slice(4)+' (promedio)';
+      } else if(compLine.startsWith('seg:')) {
+        const rest = compLine.slice(4), sep = rest.indexOf('::');
+        const lCol = rest.slice(0,sep), lVal = rest.slice(sep+2);
+        const lIdx = RCP.headers.indexOf(lCol);
+        lineRows = rcpRowsByMed(med).filter(r=>String(r[lIdx]||'').trim()===lVal);
+        lineLabel = lCol+': '+lVal;
+      }
+      if(lineRows) {
+        datasets.push({
+          label: lineLabel, type: 'line',
+          data: dims.map(d=>{ const v=rcpMean(lineRows,d.col); return v!==null?+v.toFixed(3):null; }),
+          borderColor:'#2E7D32', backgroundColor:'transparent',
+          pointBackgroundColor:'#2E7D32', borderWidth:2.5, tension:0.3, pointRadius:4, order:1,
+        });
+      }
+    }
+
+    const rdValueLabels = {
+      id: 'rdValueLabels',
+      afterDatasetsDraw(chart) {
+        const ctx = chart.ctx;
+        chart.data.datasets.forEach((ds, di) => {
+          if(ds.type === 'line') return;
+          const meta = chart.getDatasetMeta(di);
+          if(meta.hidden) return;
+          meta.data.forEach((bar, i) => {
+            const v = ds.data[i];
+            if(v === null || v === undefined) return;
+            ctx.save();
+            ctx.font = '600 10px "DM Sans", sans-serif';
+            ctx.fillStyle = di === 0 ? '#ffffff' : '#666';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            const labelY = Math.min(bar.base - 4, bar.y + 16);
+            ctx.fillText((+v).toFixed(2), bar.x, labelY);
+            ctx.restore();
+          });
+        });
+      }
+    };
+
+    chartCfg = {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        layout: { padding: { top: 16, bottom: 60, left: 5, right: 20 } },
+        plugins: {
+          title: { display:true, text:def.nombre, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
+          legend: { position:'bottom', labels:{ font:{size:11}, padding:14,
+            generateLabels(chart) {
+              return chart.data.datasets.map((ds,i)=>({
+                text: ds.label,
+                fillStyle: Array.isArray(ds.backgroundColor)?ds.backgroundColor[0]:ds.backgroundColor,
+                strokeStyle: Array.isArray(ds.borderColor)?ds.borderColor[0]:ds.borderColor,
+                lineWidth: ds.type==='line'?2:0,
+                hidden: !!chart.getDatasetMeta(i).hidden,
+                datasetIndex: i,
+              }));
+            }
+          }},
+          tooltip:{ callbacks:{ label: ctx=>ctx.dataset.label+': '+(ctx.raw!==null?(+ctx.raw).toFixed(2):'—') }},
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: {
+              font:{size:10}, color:'#444',
+              maxRotation:90, minRotation:90, autoSkip:false, padding:24,
+              callback: function(val) {
+                var lbl=this.getLabelForValue(val)||'';
+                var words=lbl.split(' '), lines=[];
+                for(var wi=0;wi<words.length;wi+=3) lines.push(words.slice(wi,wi+3).join(' '));
+                return lines.length>1?lines:lbl;
+              }
+            }
+          },
+          y: { min:1, max:5, grid:{color:'rgba(0,0,0,0.04)'}, ticks:{font:{size:10},stepSize:0.5} }
+        },
+        animation: { duration:400 }
+      },
+      plugins: [rdValueLabels]
+    };
 
   } else if(def.id==='enps') {
     const meds=rcpGetParam('meds')||RCP.mediciones;
