@@ -5456,26 +5456,39 @@ function rcpGenerate() {
        borderColor:RCP_COLORS.agotamiento.border, backgroundColor:'transparent',
        pointBackgroundColor:RCP_COLORS.agotamiento.border, borderWidth:2.5, tension:0.3, pointRadius:5},
     ];
-    const _histBase = rcpBaseOptions(def.nombre, false, {min:0,max:6});
-    _histBase.scales.x = {
-      grid: { display: false },
-      ticks: {
-        font: { size: 10 }, color: '#444',
-        maxRotation: 90, minRotation: 90, autoSkip: false, padding: 24,
-        callback: function(val) {
-          var lbl = this.getLabelForValue(val) || '';
-          var words = lbl.split(' ');
-          var lines = [];
-          for(var wi=0; wi<words.length; wi+=3) lines.push(words.slice(wi,wi+3).join(' '));
-          return lines.length > 1 ? lines : lbl;
-        }
-      }
-    };
-    _histBase.layout = { padding: { bottom: 30, left: 5, right: 20 } };
     chartCfg = {
       type: 'line',
       data: { labels, datasets: ds },
-      options: _histBase,
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        layout: { padding: { top: 24, bottom: 60, left: 5, right: 40 } },
+        plugins: {
+          title: { display: true, text: def.nombre, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
+          legend: { position: 'bottom', labels: { font:{size:11}, padding:14 } },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: {
+              font: { size: 10 }, color: '#444',
+              maxRotation: 90, minRotation: 90, autoSkip: false, padding: 24,
+              callback: function(val) {
+                var lbl = this.getLabelForValue(val) || '';
+                var words = lbl.split(' ');
+                var lines = [];
+                for(var wi=0; wi<words.length; wi+=3) lines.push(words.slice(wi,wi+3).join(' '));
+                return lines.length > 1 ? lines : lbl;
+              }
+            }
+          },
+          y: {
+            min: 0, max: 6,
+            grid: { color: 'rgba(0,0,0,0.04)' },
+            ticks: { font: { size: 10 } }
+          }
+        },
+        animation: { duration: 400 }
+      },
       plugins: [{
         id: 'linePointLabels',
         afterDatasetsDraw(chart) {
