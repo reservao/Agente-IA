@@ -5694,7 +5694,7 @@ function rcpGenerate() {
         lineLabel = lCol+': '+lVal;
       } else if(src.startsWith('opt:') || src.startsWith('crit:')) {
         const isOpt = src.startsWith('opt:');
-        const lineMed = src.slice(4);
+        const lineMed = src.slice(isOpt ? 4 : 5); // 'opt:' = 4 chars, 'crit:' = 5 chars
         const allRows = rcpRowsByMed(lineMed);
         const engIdx = rcpColIdxFuzzy('WORK_ENGAGEMENT'), agoIdx = rcpColIdxFuzzy('EXHAUSTION');
         if(engIdx >= 0 && agoIdx >= 0) {
