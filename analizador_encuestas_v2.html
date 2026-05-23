@@ -4080,7 +4080,7 @@ function rProcess(wb, filename) {
   const DEMO_PATTERNS = [/genero|gender|sexo/i, /antiguedad_rango|rango.*antig/i, /^edad$|generacion/i];
 
   // eNPS tag
-  const ENPS_PATTERNS = [/enps_tag|enps tag/i];
+  const ENPS_PATTERNS = [/enps_cat|enps_tag|enps\.tag/i];
 
   R.sheetDefs = [];
   R.sheetDefs.push({ id:'general', label:'Resultados Generales', type:'general', checked:true });
@@ -4295,7 +4295,7 @@ function rcMean(rows, col) {
 }
 
 function rcSpecialVal(rows, special) {
-  const tagIdx = RC.headers.findIndex(h => /enps_cat|enps_tag|enps.tag/i.test(h));
+  const tagIdx = RC.headers.findIndex(h => /enps_cat|enps_tag|enps\.tag/i.test(h));
   if (tagIdx < 0) return null;
   const tags = rows.map(r => String(r[tagIdx]||'').trim()).filter(Boolean);
   if (!tags.length) return null;
@@ -4379,7 +4379,7 @@ function rcProcess(wb, filename) {
 
   // Variable checkboxes — show known vars that exist + any unknown numeric columns
   const availableVars = RC_VARS.filter(v => {
-    if (v.special) return RC.headers.some(h => /enps_cat|enps_tag|enps.tag/i.test(h));
+    if (v.special) return RC.headers.some(h => /enps_cat|enps_tag|enps\.tag/i.test(h));
     return rColIdxFuzzy(v.col) >= 0;
   });
 
@@ -4451,7 +4451,7 @@ function rcGenerate() {
   } else {
     const medIdx = RC.headers.indexOf(RC.medCol);
     RC.selectedMeds.forEach(m => {
-      rowsByMed[m] = RC.rows.filter(r => String(r[medIdx]).trim() === m);
+      rowsByMed[m] = RC.rows.filter(r => String(r[medIdx] ?? '').trim() === m);
     });
   }
 
@@ -4549,6 +4549,16 @@ function rcGenerate() {
   const rcCanvas = document.getElementById('rc-canvas');
   if (!rcCanvas) { console.error('rc-canvas not found'); return; }
   if (RC.chart) { RC.chart.destroy(); RC.chart = null; }
+
+  // Auto-resize canvas when many bars to avoid label overlap (match RCP behavior)
+  {
+    const containerW = rcCanvas.parentElement?.offsetWidth || 900;
+    const nBars = labels.length;
+    const useW = Math.max(600, nBars * 80, containerW);
+    if (useW > containerW) { rcCanvas.style.width = useW + 'px'; rcCanvas.parentElement.style.overflowX = 'auto'; }
+    else { rcCanvas.style.width = ''; rcCanvas.parentElement.style.overflowX = ''; }
+  }
+
   const ctx = rcCanvas.getContext('2d');
 
   const isHorizontal = type === 'bar' || type === 'bar100';
@@ -4812,6 +4822,7 @@ function rcpColIdxFuzzy(col) {
   // Nivel 3: fuzzy — el encabezado contiene el nombre como parte de su token
   // Maneja formatos como "(WE1-1.5)", "Promedio Engagement", "WORK_ENGAGEMENT_D9"
   return RCP.headers.findIndex(h => {
+    if (!h) return false;
     var nh = rcpNorm(h).replace(/_/g,'').replace(/ /g,'');
     if (nh === nc) return true;
     var parts = h.split(/[-_()\s.]/);
@@ -4837,7 +4848,7 @@ function rcpRowsByMed(med) {
   if (RCP._singleMed || RCP.medCol === '__single__') return RCP.rows;
   const idx = rcpColIdx(RCP.medCol);
   if (idx < 0) return RCP.rows;
-  return RCP.rows.filter(r=>String(r[idx]).trim()===med);
+  return RCP.rows.filter(r=>String(r[idx] ?? '').trim()===med);
 }
 
 function rcpProcess(wb, filename) {
@@ -4858,7 +4869,7 @@ function rcpProcess(wb, filename) {
   RCP.filename=filename;
 
   // Detección de medición con keywords extendidas → centinela __single__ si no hay
-  const rcpMedColName = rFindCol(['medicion','measurement','periodo','year','año','mes','month','ola','wave'], RCP.headers);
+  const rcpMedColName = detectMedicionCol(RCP.headers);
   const mc={};
   if (rcpMedColName) {
     const medIdx = RCP.headers.indexOf(rcpMedColName);
@@ -4882,7 +4893,7 @@ function rcpProcess(wb, filename) {
   const cards = RCP_DEFS.map((def,i) => {
     // Check if required columns exist (use fuzzy matching for non-standard column names)
     const available = def.requiere.every(col => {
-      if(col==='eNPS_tag') return RCP.headers.some(h=>/enps_cat|enps_tag|enps.tag/i.test(h));
+      if(col==='eNPS_tag') return RCP.headers.some(h=>/enps_cat|enps_tag|enps\.tag/i.test(h));
       return rcpColIdxFuzzy(col)>=0;
     });
     const onclickAttr = available ? 'rcpSelectDef(' + i + ')' : '';
@@ -5058,7 +5069,7 @@ function rcpGetBenchLines(mainCol, itemsMap) {
   const lines = [];
   const container = document.getElementById('rcp_bench_lines');
   if(!container) return lines;
-  for(var i=0; i<container.children.length; i++) {
+  for(let i=0; i<container.children.length; i++) {
     const div = container.children[i];
     const idx = div.id.replace('bench_line_','');
     const type    = document.getElementById('bench_type_'+idx)?.value || 'manual';
@@ -5429,7 +5440,7 @@ function rcpGenerate() {
   } else if(def.id==='enps') {
     const meds=rcpGetParam('meds')||RCP.mediciones;
     const seg=rcpGetParam('seg');
-    const tagIdx=RCP.headers.findIndex(h=>/enps_tag/i.test(h));
+    const tagIdx=RCP.headers.findIndex(h=>/enps_cat|enps_tag|enps\.tag/i.test(h));
     let labels=[], promoD=[], neutroD=[], detrD=[];
     if(seg) {
       const segIdx=RCP.headers.indexOf(seg);
@@ -5569,6 +5580,8 @@ function rcpBarChart(labels, datasets, title, horizontal, yAxis) {
 
 function rcpDownloadPNG() {
   if(!RCP.chart) return;
+  const canvas = document.getElementById('rcp-canvas');
+  if (!canvas) { alert('No hay gráfico activo.'); return; }
   // Force redraw then capture
   RCP.chart.draw();
   requestAnimationFrame(() => {
@@ -5830,7 +5843,7 @@ function rBuildRows(groups) {
 
   // ── eNPS al final ──────────────────────────────────────────────────────
   // Detect eNPS tag column (ENPS_CAT, ENPS_TAG, etc.)
-  const enpsTagIdx = R.headers.findIndex(h => /enps_cat|enps_tag|enps tag/i.test(h));
+  const enpsTagIdx = R.headers.findIndex(h => /enps_cat|enps_tag|enps\.tag/i.test(h));
   if (enpsTagIdx >= 0) {
     // eNPS score row
     const enpsRow = ['eNPS', 'dim', ...groups.map(g => {
@@ -5892,7 +5905,7 @@ function rGenerate() {
       // Filter rows by selected meds
       const rowsByMed = {};
       R.selectedMeds.forEach(m => {
-        rowsByMed[m] = medIdx < 0 ? [...R.rows] : R.rows.filter(r => String(r[medIdx]).trim() === m);
+        rowsByMed[m] = medIdx < 0 ? [...R.rows] : R.rows.filter(r => String(r[medIdx] ?? '').trim() === m);
       });
 
       for (const sh of R.sheetDefs) {
