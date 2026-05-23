@@ -5645,7 +5645,7 @@ function rcpGenerate() {
       let lineRows, lineLabel;
       if(compLine.startsWith('med:')) {
         lineRows = rcpRowsByMed(compLine.slice(4));
-        lineLabel = compLine.slice(4)+' (promedio)';
+        lineLabel = compLine.slice(4)+' (promedio org)';
       } else if(compLine.startsWith('seg:')) {
         const rest = compLine.slice(4), sep = rest.indexOf('::');
         const lCol = rest.slice(0,sep), lVal = rest.slice(sep+2);
@@ -5660,26 +5660,32 @@ function rcpGenerate() {
         if(engIdx >= 0 && agoIdx >= 0) {
           const eVals = allRows.map(r=>parseFloat(r[engIdx])).filter(v=>!isNaN(v)).sort((a,b)=>a-b);
           const aVals = allRows.map(r=>parseFloat(r[agoIdx])).filter(v=>!isNaN(v)).sort((a,b)=>a-b);
-          const p75e=eVals[Math.floor(eVals.length*0.75)], p25e=eVals[Math.floor(eVals.length*0.25)];
-          const p25a=aVals[Math.floor(aVals.length*0.25)], p75a=aVals[Math.floor(aVals.length*0.75)];
+          // Use p60/p40 (instead of p75/p25) for broader groups
+          const p60e=eVals[Math.floor(eVals.length*0.60)], p40e=eVals[Math.floor(eVals.length*0.40)];
+          const p40a=aVals[Math.floor(aVals.length*0.40)], p60a=aVals[Math.floor(aVals.length*0.60)];
           if(isOpt) {
-            lineRows = allRows.filter(r=>parseFloat(r[engIdx])>=p75e && parseFloat(r[agoIdx])<=p25a);
+            lineRows = allRows.filter(r=>parseFloat(r[engIdx])>=p60e && parseFloat(r[agoIdx])<=p40a);
             lineLabel = 'Óptimo org: '+lineMed;
           } else {
-            lineRows = allRows.filter(r=>parseFloat(r[engIdx])<=p25e && parseFloat(r[agoIdx])>=p75a);
+            lineRows = allRows.filter(r=>parseFloat(r[engIdx])<=p40e && parseFloat(r[agoIdx])>=p60a);
             lineLabel = 'Crítico org: '+lineMed;
           }
         }
       }
-      if(lineRows) {
-        datasets.push({
-          label: lineLabel, type: 'line',
-          data: dims.map(d=>{ const v=rcpMean(lineRows,d.col); return v!==null?+v.toFixed(3):null; }),
-          borderColor:'#2E7D32', backgroundColor:'transparent',
-          pointBackgroundColor:'#2E7D32', borderWidth:2.5, tension:0.3, pointRadius:4, order:1,
-        });
+      if(lineRows && lineRows.length > 0) {
+        const lineData = dims.map(d=>{ const v=rcpMean(lineRows,d.col); return v!==null?+v.toFixed(3):null; });
+        const hasData = lineData.some(v=>v!==null);
+        if(hasData) {
+          datasets.push({
+            label: lineLabel, type: 'line',
+            data: lineData,
+            borderColor:'#2E7D32', backgroundColor:'rgba(46,125,50,0.08)',
+            pointBackgroundColor:'#2E7D32', pointBorderColor:'#fff', pointBorderWidth:2,
+            borderWidth:2.5, tension:0.25, pointRadius:5, pointHoverRadius:7,
+            spanGaps: true, order: 4,
+          });
+        }
       }
-    }
 
     const rdValueLabels = {
       id: 'rdValueLabels',
