@@ -5058,10 +5058,15 @@ function renderRcpParams() {
           const vals=[...new Set(RCP.rows.map(r=>String(r[RCP.headers.indexOf(c)]||'').trim()).filter(Boolean))].sort();
           return vals.map(v=>`<option value="seg:${c}::${v}">${c}: ${v}</option>`).join('');
         }).join('') + '</optgroup>' : '';
+      const medLineOpts = RCP.mediciones.map(m=>
+        `<option value="med:${m}">Promedio org: ${m}</option>`+
+        `<option value="opt:${m}">Óptimo org (alto ENG+bajo AGOT): ${m}</option>`+
+        `<option value="crit:${m}">Crítico org (bajo ENG+alto AGOT): ${m}</option>`
+      ).join('');
       html += `<select id="rcp_${p.id}"
         style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
         <option value="">— Sin línea —</option>
-        <optgroup label="Por medición">${RCP.mediciones.map(m=>`<option value="med:${m}">Promedio org: ${m}</option>`).join('')}</optgroup>
+        <optgroup label="Por medición">${medLineOpts}</optgroup>
         ${segLineOpts}
       </select>`;
     }
@@ -5588,7 +5593,7 @@ function rcpGenerate() {
       data: dims.map(d=>{ const v=rcpMean(mainRows,d.col); return v!==null?+v.toFixed(3):null; }),
       backgroundColor: barBg, borderColor: barBorder, borderWidth: 0,
       borderRadius: {topLeft:6,topRight:6,bottomLeft:0,bottomRight:0}, borderSkipped: false,
-      categoryPercentage: 0.82, barPercentage: hasComp ? 0.48 : 0.72, order: 2,
+      categoryPercentage: 0.85, barPercentage: hasComp ? 1.0 : 0.75, order: 2,
     }];
 
     if(hasComp) {
@@ -5598,7 +5603,7 @@ function rcpGenerate() {
         data: dims.map(d=>{ const v=rcpMean(compRows,d.col); return v!==null?+v.toFixed(3):null; }),
         backgroundColor: 'rgba(170,170,170,0.65)', borderColor: 'rgba(130,130,130,0.8)',
         borderWidth: 0, borderRadius: {topLeft:4,topRight:4,bottomLeft:0,bottomRight:0},
-        borderSkipped: false, categoryPercentage: 0.82, barPercentage: 0.48, order: 3,
+        borderSkipped: false, categoryPercentage: 0.85, barPercentage: 1.0, order: 3,
       });
     }
 
@@ -5613,6 +5618,24 @@ function rcpGenerate() {
         const lIdx = RCP.headers.indexOf(lCol);
         lineRows = rcpRowsByMed(med).filter(r=>String(r[lIdx]||'').trim()===lVal);
         lineLabel = lCol+': '+lVal;
+      } else if(compLine.startsWith('opt:') || compLine.startsWith('crit:')) {
+        const isOpt = compLine.startsWith('opt:');
+        const lineMed = compLine.slice(4);
+        const allRows = rcpRowsByMed(lineMed);
+        const engIdx = rcpColIdxFuzzy('WORK_ENGAGEMENT'), agoIdx = rcpColIdxFuzzy('EXHAUSTION');
+        if(engIdx >= 0 && agoIdx >= 0) {
+          const eVals = allRows.map(r=>parseFloat(r[engIdx])).filter(v=>!isNaN(v)).sort((a,b)=>a-b);
+          const aVals = allRows.map(r=>parseFloat(r[agoIdx])).filter(v=>!isNaN(v)).sort((a,b)=>a-b);
+          const p75e=eVals[Math.floor(eVals.length*0.75)], p25e=eVals[Math.floor(eVals.length*0.25)];
+          const p25a=aVals[Math.floor(aVals.length*0.25)], p75a=aVals[Math.floor(aVals.length*0.75)];
+          if(isOpt) {
+            lineRows = allRows.filter(r=>parseFloat(r[engIdx])>=p75e && parseFloat(r[agoIdx])<=p25a);
+            lineLabel = 'Óptimo org: '+lineMed;
+          } else {
+            lineRows = allRows.filter(r=>parseFloat(r[engIdx])<=p25e && parseFloat(r[agoIdx])>=p75a);
+            lineLabel = 'Crítico org: '+lineMed;
+          }
+        }
       }
       if(lineRows) {
         datasets.push({
@@ -5635,13 +5658,17 @@ function rcpGenerate() {
           meta.data.forEach((bar, i) => {
             const v = ds.data[i];
             if(v === null || v === undefined) return;
+            const barH = bar.base - bar.y;
+            if(barH < 18) return; // too short to fit rotated label
             ctx.save();
-            ctx.font = '600 10px "DM Sans", sans-serif';
-            ctx.fillStyle = di === 0 ? '#ffffff' : '#666';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'bottom';
-            const labelY = Math.min(bar.base - 4, bar.y + 16);
-            ctx.fillText((+v).toFixed(2), bar.x, labelY);
+            const fontSize = Math.min(10, Math.max(7, bar.width * 0.45));
+            ctx.font = `600 ${fontSize}px "DM Sans", sans-serif`;
+            ctx.fillStyle = di === 0 ? '#ffffff' : '#555';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.translate(bar.x, bar.base - 6); // anchor at bar base
+            ctx.rotate(-Math.PI / 2);            // 270° — text reads bottom→top
+            ctx.fillText((+v).toFixed(2), 4, 0); // 4px margin from base edge
             ctx.restore();
           });
         });
