@@ -5728,10 +5728,15 @@ function rcpGenerate() {
       }
     });
 
+    const nBars = dims.length;
+    const valFontSize = nBars > 15 ? 8 : (nBars > 8 ? 9 : 11);
+
     const rdValueLabels = {
       id: 'rdValueLabels',
       afterDatasetsDraw(chart) {
         const ctx = chart.ctx;
+        const yScale = chart.scales['y'];
+        const barBottom = yScale ? yScale.getPixelForValue(1) : null;
         chart.data.datasets.forEach((ds, di) => {
           if(ds.type === 'line') return;
           const meta = chart.getDatasetMeta(di);
@@ -5739,24 +5744,23 @@ function rcpGenerate() {
           meta.data.forEach((bar, i) => {
             const v = ds.data[i];
             if(v === null || v === undefined) return;
-            const barH = bar.base - bar.y;
-            if(barH < 18) return; // too short to fit rotated label
+            const base   = barBottom !== null ? barBottom : bar.base;
+            const barH   = base - bar.y;
+            const txt    = (+v).toFixed(2);
             ctx.save();
-            const fontSize = Math.min(10, Math.max(7, bar.width * 0.45));
-            ctx.font = `600 ${fontSize}px "DM Sans", sans-serif`;
+            ctx.font = `600 ${valFontSize}px "DM Sans", sans-serif`;
             ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            // Anchor at vertical center of the bar so text stays inside
-            const midY = bar.y + (bar.base - bar.y) / 2;
-            ctx.translate(bar.x, midY);
-            ctx.rotate(-Math.PI / 2);
-            const txt = (+v).toFixed(2);
-            ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-            ctx.lineWidth = 2.5;
-            ctx.lineJoin = 'round';
-            ctx.strokeText(txt, 0, 0);
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText(txt, 0, 0);
+            if(barH > 22) {
+              // Inside bar near base — same as engagement
+              ctx.fillStyle = 'rgba(255,255,255,0.92)';
+              ctx.textBaseline = 'bottom';
+              ctx.fillText(txt, bar.x, base - 4);
+            } else {
+              // Bar too short: place above it
+              ctx.fillStyle = '#444';
+              ctx.textBaseline = 'bottom';
+              ctx.fillText(txt, bar.x, bar.y - 2);
+            }
             ctx.restore();
           });
         });
