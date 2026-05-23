@@ -5456,10 +5456,26 @@ function rcpGenerate() {
        borderColor:RCP_COLORS.agotamiento.border, backgroundColor:'transparent',
        pointBackgroundColor:RCP_COLORS.agotamiento.border, borderWidth:2.5, tension:0.3, pointRadius:5},
     ];
+    const _histBase = rcpBaseOptions(def.nombre, false, {min:0,max:6});
+    _histBase.scales.x = {
+      grid: { display: false },
+      ticks: {
+        font: { size: 10 }, color: '#444',
+        maxRotation: 90, minRotation: 90, autoSkip: false, padding: 24,
+        callback: function(val) {
+          var lbl = this.getLabelForValue(val) || '';
+          var words = lbl.split(' ');
+          var lines = [];
+          for(var wi=0; wi<words.length; wi+=3) lines.push(words.slice(wi,wi+3).join(' '));
+          return lines.length > 1 ? lines : lbl;
+        }
+      }
+    };
+    _histBase.layout = { padding: { bottom: 30, left: 5, right: 20 } };
     chartCfg = {
       type: 'line',
       data: { labels, datasets: ds },
-      options: rcpBaseOptions(def.nombre, false, {min:0,max:6}),
+      options: _histBase,
       plugins: [{
         id: 'linePointLabels',
         afterDatasetsDraw(chart) {
