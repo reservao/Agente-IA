@@ -5744,18 +5744,19 @@ function rcpGenerate() {
             ctx.save();
             const fontSize = Math.min(10, Math.max(7, bar.width * 0.45));
             ctx.font = `600 ${fontSize}px "DM Sans", sans-serif`;
-            ctx.textAlign = 'left';
+            ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.translate(bar.x, bar.base - 6);
+            // Anchor at vertical center of the bar so text stays inside
+            const midY = bar.y + (bar.base - bar.y) / 2;
+            ctx.translate(bar.x, midY);
             ctx.rotate(-Math.PI / 2);
             const txt = (+v).toFixed(2);
-            // Stroke for contrast on any background, then fill white
             ctx.strokeStyle = 'rgba(0,0,0,0.45)';
             ctx.lineWidth = 2.5;
             ctx.lineJoin = 'round';
-            ctx.strokeText(txt, 4, 0);
+            ctx.strokeText(txt, 0, 0);
             ctx.fillStyle = '#ffffff';
-            ctx.fillText(txt, 4, 0);
+            ctx.fillText(txt, 0, 0);
             ctx.restore();
           });
         });
