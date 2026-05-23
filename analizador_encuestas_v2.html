@@ -4624,24 +4624,23 @@ function rcDownloadPNG() {
 
 function rcDownloadPPT() {
   if(!RC.chart){alert('Primero genera el gráfico.');return;}
-  const canvas = document.getElementById('rc-canvas');
-  const title  = document.getElementById('rc-title').value || 'Gráfico';
-  const origW  = canvas.offsetWidth  || 800;
-  const origH  = canvas.offsetHeight || 500;
-  RC.chart.resize(origW * 3, origH * 3);
+  RC.chart.draw();
   requestAnimationFrame(() => {
+    const canvas = document.getElementById('rc-canvas');
+    const title  = document.getElementById('rc-title').value || 'Gráfico';
+    const cw = canvas.width  || canvas.offsetWidth  || 800;
+    const ch = canvas.height || canvas.offsetHeight || 500;
     const tmp = document.createElement('canvas');
-    tmp.width = canvas.width; tmp.height = canvas.height;
+    tmp.width = cw; tmp.height = ch;
     const ctx2 = tmp.getContext('2d');
-    ctx2.fillStyle = '#FFFFFF'; ctx2.fillRect(0, 0, tmp.width, tmp.height);
-    ctx2.drawImage(canvas, 0, 0);
+    ctx2.fillStyle = '#FFFFFF'; ctx2.fillRect(0, 0, cw, ch);
+    ctx2.drawImage(canvas, 0, 0, cw, ch);
     const imgData = tmp.toDataURL('image/png', 1.0);
-    RC.chart.resize(origW, origH);
     if(!imgData || imgData === 'data:,') {
       alert('No se pudo capturar. Intenta generar el gráfico nuevamente.');
       return;
     }
-    rcBuildPPT(imgData, title, origW, origH);
+    rcBuildPPT(imgData, title, cw, ch);
   });
 }
 
@@ -5624,24 +5623,23 @@ function rcpDownloadPNG() {
 
 function rcpDownloadPPT() {
   if(!RCP.chart){alert('Primero genera el gráfico.');return;}
-  const canvas = document.getElementById('rcp-canvas');
-  const title  = RCP.currentDef ? RCP.currentDef.nombre : 'Gráfico';
-  const origW  = canvas.offsetWidth  || 800;
-  const origH  = canvas.offsetHeight || 500;
-  RCP.chart.resize(origW * 3, origH * 3);
+  RCP.chart.draw();
   requestAnimationFrame(() => {
+    const canvas = document.getElementById('rcp-canvas');
+    const title  = RCP.currentDef ? RCP.currentDef.nombre : 'Gráfico';
+    const cw = canvas.width  || canvas.offsetWidth  || 800;
+    const ch = canvas.height || canvas.offsetHeight || 500;
     const tmp = document.createElement('canvas');
-    tmp.width = canvas.width; tmp.height = canvas.height;
+    tmp.width = cw; tmp.height = ch;
     const ctx2 = tmp.getContext('2d');
-    ctx2.fillStyle = '#FFFFFF'; ctx2.fillRect(0, 0, tmp.width, tmp.height);
-    ctx2.drawImage(canvas, 0, 0);
+    ctx2.fillStyle = '#FFFFFF'; ctx2.fillRect(0, 0, cw, ch);
+    ctx2.drawImage(canvas, 0, 0, cw, ch);
     const imgData = tmp.toDataURL('image/png', 1.0);
-    RCP.chart.resize(origW, origH);
     if(!imgData || imgData === 'data:,' || imgData.length < 100) {
       alert('No se pudo capturar el gráfico. Intenta generarlo nuevamente.');
       return;
     }
-    rcBuildPPT(imgData, title, origW, origH);
+    rcBuildPPT(imgData, title, cw, ch);
   });
 }
 
