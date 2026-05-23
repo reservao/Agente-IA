@@ -1109,7 +1109,14 @@ tr:hover td { background: var(--bg); }
             <div class="card" style="padding:1rem">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
                 <span style="font-size:13px;font-weight:600" id="rcp-preview-lbl"></span>
-                <div style="display:flex;gap:8px">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <div style="display:flex;align-items:center;gap:6px;background:#f0ede8;border-radius:8px;padding:4px 10px">
+                    <span style="font-size:11px;color:#666;white-space:nowrap">Ancho:</span>
+                    <input type="range" id="rcp-width-slider" min="300" max="1400" step="50" value="900"
+                      style="width:90px;accent-color:#1B3F6E;cursor:pointer"
+                      oninput="rcpSetChartWidth(this.value)" />
+                    <span id="rcp-width-label" style="font-size:11px;color:#444;min-width:38px">900px</span>
+                  </div>
                   <button class="btn btn-secondary btn-sm" onclick="rcpDownloadPNG()">⬇ PNG</button>
                 </div>
               </div>
@@ -1204,7 +1211,14 @@ tr:hover td { background: var(--bg); }
           <div class="card" style="padding:1rem">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
               <span style="font-size:14px;font-weight:600" id="rc-preview-title"></span>
-              <div style="display:flex;gap:8px">
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <div style="display:flex;align-items:center;gap:6px;background:#f0ede8;border-radius:8px;padding:4px 10px">
+                  <span style="font-size:11px;color:#666;white-space:nowrap">Ancho:</span>
+                  <input type="range" id="rc-width-slider" min="300" max="1400" step="50" value="900"
+                    style="width:90px;accent-color:#1B3F6E;cursor:pointer"
+                    oninput="rcSetChartWidth(this.value)" />
+                  <span id="rc-width-label" style="font-size:11px;color:#444;min-width:38px">900px</span>
+                </div>
                 <button class="btn btn-secondary btn-sm" onclick="rcDownloadPNG()">⬇ Descargar PNG</button>
               </div>
             </div>
@@ -4604,6 +4618,24 @@ function rcGenerate() {
   document.getElementById('rc-preview-title').textContent = title || 'Gráfico generado';
   document.getElementById('rc-preview-wrap').style.display = 'block';
   document.getElementById('rc-preview-wrap').scrollIntoView({behavior:'smooth'});
+  // Sync width slider to actual chart width
+  requestAnimationFrame(() => {
+    const w = Math.round(RC.chart.width || 900);
+    const sl = document.getElementById('rc-width-slider');
+    const lb = document.getElementById('rc-width-label');
+    if (sl) sl.value = Math.min(1400, Math.max(300, w));
+    if (lb) lb.textContent = Math.min(1400, Math.max(300, w)) + 'px';
+  });
+}
+
+function rcSetChartWidth(w) {
+  w = parseInt(w);
+  const lbl = document.getElementById('rc-width-label');
+  if (lbl) lbl.textContent = w + 'px';
+  if (!RC.chart) return;
+  const wrap = document.getElementById('rc-canvas')?.parentElement;
+  if (wrap) wrap.style.width = w + 'px';
+  RC.chart.resize(w, RC.chart.height);
 }
 
 function rcDownloadPNG() {
@@ -5555,6 +5587,14 @@ function rcpGenerate() {
   document.getElementById('rcp-preview-lbl').textContent = def.nombre;
   document.getElementById('rcp-preview-wrap').style.display='block';
   document.getElementById('rcp-preview-wrap').scrollIntoView({behavior:'smooth'});
+  // Sync width slider to actual chart width
+  requestAnimationFrame(() => {
+    const w = Math.round(RCP.chart.width || 900);
+    const sl = document.getElementById('rcp-width-slider');
+    const lb = document.getElementById('rcp-width-label');
+    if (sl) sl.value = Math.min(1400, Math.max(300, w));
+    if (lb) lb.textContent = Math.min(1400, Math.max(300, w)) + 'px';
+  });
 }
 
 // ── Chart helpers ──────────────────────────────────────────────────────────
@@ -5576,6 +5616,16 @@ function rcpBaseOptions(title, stacked, yAxis) {
 function rcpBarChart(labels, datasets, title, horizontal, yAxis) {
   return { type:'bar', data:{labels,datasets},
     options:{...rcpBaseOptions(title, false, yAxis), indexAxis: horizontal?'y':'x'} };
+}
+
+function rcpSetChartWidth(w) {
+  w = parseInt(w);
+  const lbl = document.getElementById('rcp-width-label');
+  if (lbl) lbl.textContent = w + 'px';
+  if (!RCP.chart) return;
+  const inner = document.getElementById('rcp-canvas-inner');
+  if (inner) inner.style.width = w + 'px';
+  RCP.chart.resize(w, RCP.chart.height);
 }
 
 function rcpDownloadPNG() {
