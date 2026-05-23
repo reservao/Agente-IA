@@ -13,7 +13,6 @@ window.XLSXWriter = window.XLSX;
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
 
@@ -1112,7 +1111,6 @@ tr:hover td { background: var(--bg); }
                 <span style="font-size:13px;font-weight:600" id="rcp-preview-lbl"></span>
                 <div style="display:flex;gap:8px">
                   <button class="btn btn-secondary btn-sm" onclick="rcpDownloadPNG()">⬇ PNG</button>
-                  <button class="btn btn-secondary btn-sm" onclick="rcpDownloadPPT()">⬇ PPT</button>
                 </div>
               </div>
               <div id="rcp-canvas-wrap" style="overflow-x:auto;width:100%">
@@ -1208,7 +1206,6 @@ tr:hover td { background: var(--bg); }
               <span style="font-size:14px;font-weight:600" id="rc-preview-title"></span>
               <div style="display:flex;gap:8px">
                 <button class="btn btn-secondary btn-sm" onclick="rcDownloadPNG()">⬇ Descargar PNG</button>
-                <button class="btn btn-secondary btn-sm" onclick="rcDownloadPPT()">⬇ Descargar PPT</button>
               </div>
             </div>
             <div style="position:relative;width:100%;min-height:420px">
@@ -4622,28 +4619,6 @@ function rcDownloadPNG() {
   });
 }
 
-function rcDownloadPPT() {
-  if(!RC.chart){alert('Primero genera el gráfico.');return;}
-  RC.chart.draw();
-  requestAnimationFrame(() => {
-    const canvas = document.getElementById('rc-canvas');
-    const title  = document.getElementById('rc-title').value || 'Gráfico';
-    const cw = canvas.width  || canvas.offsetWidth  || 800;
-    const ch = canvas.height || canvas.offsetHeight || 500;
-    const tmp = document.createElement('canvas');
-    tmp.width = cw; tmp.height = ch;
-    const ctx2 = tmp.getContext('2d');
-    ctx2.fillStyle = '#FFFFFF'; ctx2.fillRect(0, 0, cw, ch);
-    ctx2.drawImage(canvas, 0, 0, cw, ch);
-    const imgData = tmp.toDataURL('image/png', 1.0);
-    if(!imgData || imgData === 'data:,') {
-      alert('No se pudo capturar. Intenta generar el gráfico nuevamente.');
-      return;
-    }
-    rcBuildPPT(imgData, title, cw, ch);
-  });
-}
-
 
 function rcLoadFile(e) {
   const f = e.target.files[0]; if (!f) return;
@@ -5621,27 +5596,6 @@ function rcpDownloadPNG() {
   });
 }
 
-function rcpDownloadPPT() {
-  if(!RCP.chart){alert('Primero genera el gráfico.');return;}
-  RCP.chart.draw();
-  requestAnimationFrame(() => {
-    const canvas = document.getElementById('rcp-canvas');
-    const title  = RCP.currentDef ? RCP.currentDef.nombre : 'Gráfico';
-    const cw = canvas.width  || canvas.offsetWidth  || 800;
-    const ch = canvas.height || canvas.offsetHeight || 500;
-    const tmp = document.createElement('canvas');
-    tmp.width = cw; tmp.height = ch;
-    const ctx2 = tmp.getContext('2d');
-    ctx2.fillStyle = '#FFFFFF'; ctx2.fillRect(0, 0, cw, ch);
-    ctx2.drawImage(canvas, 0, 0, cw, ch);
-    const imgData = tmp.toDataURL('image/png', 1.0);
-    if(!imgData || imgData === 'data:,' || imgData.length < 100) {
-      alert('No se pudo capturar el gráfico. Intenta generarlo nuevamente.');
-      return;
-    }
-    rcBuildPPT(imgData, title, cw, ch);
-  });
-}
 
 function rcpReset() {
   if(RCP.chart){RCP.chart.destroy();RCP.chart=null;}
@@ -5663,39 +5617,7 @@ function rcpDov(e){e.preventDefault();document.getElementById('rcp-dz').classLis
 function rcpDol(){document.getElementById('rcp-dz').classList.remove('over')}
 function rcpDdr(e){e.preventDefault();rcpDol();const f=e.dataTransfer.files[0];if(f){const r=new FileReader();r.onload=ev=>rcpProcess(XLSX.read(ev.target.result,{type:'array'}),f.name);r.readAsArrayBuffer(f);}}
 
-// Shared PPT builder (used by both libre and predeterminados)
-function rcBuildPPT(imgData, title, canvasW, canvasH) {
-  if(typeof PptxGenJS === 'undefined') {
-    alert('Librería PPT no disponible. Descargando como PNG.');
-    const a=document.createElement('a');
-    a.download=(title||'grafico')+'.png';
-    a.href=imgData; a.click();
-    return;
-  }
-  const pptx = new PptxGenJS();
-  pptx.layout = 'LAYOUT_WIDE'; // 13.33" x 7.5"
-  const slide = pptx.addSlide();
-  slide.background = { color: 'FFFFFF' };
-  // Title
-  const titleH = 0.55, margin = 0.3;
-  const slideW = 13.33, slideH = 7.5;
-  slide.addText(title || 'Gráfico', {
-    x: margin, y: 0.2, w: slideW - margin*2, h: titleH,
-    fontSize: 18, bold: true, color: '1A1916', fontFace: 'Calibri'
-  });
-  // Fit image maintaining aspect ratio
-  const availW = slideW - margin*2;
-  const availH = slideH - titleH - margin*3;
-  const imgAR  = (canvasW && canvasH) ? canvasW / canvasH : availW / availH;
-  const availAR = availW / availH;
-  let imgW, imgH;
-  if(imgAR > availAR) { imgW = availW; imgH = availW / imgAR; }
-  else                { imgH = availH; imgW = availH * imgAR; }
-  const imgX = margin + (availW - imgW) / 2;
-  const imgY = titleH + margin*2 + (availH - imgH) / 2;
-  slide.addImage({ data: imgData, x: imgX, y: imgY, w: imgW, h: imgH });
-  pptx.writeFile({ fileName: (title || 'grafico') + '.pptx' });
-}
+
 function rcReset() {
   RC.chart = null;
   RC.headers=[]; RC.rows=[]; RC.filename=''; RC.mediciones=[]; RC.selectedMeds=[];
