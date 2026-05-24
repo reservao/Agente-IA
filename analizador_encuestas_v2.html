@@ -4309,14 +4309,25 @@ function rcMean(rows, col) {
 }
 
 function rcSpecialVal(rows, special) {
-  const tagIdx = RC.headers.findIndex(h => /enps_cat|enps_tag|enps\.tag/i.test(h));
+  let tagIdx = RC.headers.findIndex(h => /enps_cat|enps_tag|enps\.tag|enps_oficial/i.test(h));
+  if (tagIdx < 0) tagIdx = RC.headers.findIndex(h => /\benps\b/i.test(h));
   if (tagIdx < 0) return null;
-  const tags = rows.map(r => String(r[tagIdx]||'').trim()).filter(Boolean);
+  function enpsCategory(val) {
+    const s = String(val==null?'':val).trim();
+    if (!s) return null;
+    if (/^promotor/i.test(s)) return 'p';
+    if (/^neutro|^pasivo/i.test(s)) return 'n';
+    if (/^detractor/i.test(s)) return 'd';
+    const num = parseFloat(s.replace(',', '.'));
+    if (!isNaN(num)) return num <= 6 ? 'd' : num <= 8 ? 'n' : 'p';
+    return null;
+  }
+  const tags = rows.map(r => enpsCategory(r[tagIdx])).filter(Boolean);
   if (!tags.length) return null;
   const n = tags.length;
-  const isPromo = t => /^promotor/i.test(t);
-  const isNeutro = t => /^neutro|^pasivo/i.test(t);
-  const isDetr  = t => /^detractor/i.test(t);
+  const isPromo = t => t === 'p';
+  const isNeutro = t => t === 'n';
+  const isDetr  = t => t === 'd';
   if (special === 'enps_score') {
     const p = tags.filter(isPromo).length;
     const d = tags.filter(isDetr).length;
@@ -4393,7 +4404,7 @@ function rcProcess(wb, filename) {
 
   // Variable checkboxes — show known vars that exist + any unknown numeric columns
   const availableVars = RC_VARS.filter(v => {
-    if (v.special) return RC.headers.some(h => /enps_cat|enps_tag|enps\.tag/i.test(h));
+    if (v.special) return RC.headers.some(h => /enps_cat|enps_tag|enps\.tag|enps_oficial/i.test(h)) || RC.headers.some(h => /\benps\b/i.test(h));
     return rColIdxFuzzy(v.col) >= 0;
   });
 
@@ -4804,7 +4815,7 @@ const RCP_COL_ALIASES = {
   'EMOTIONAL_DEMANDS':['emotionaldemands','emocionales','demandas_emocionales','promedio_demandas_emocionales'],
   'ROLE_CONFLICT':    ['roleconflict','conflicto','conflicto_de_rol','promedio_conflicto','promedio conflicto'],
   'HASSLES':          ['hassles','trabas','trabas_en_el_trabajo','promedio_trabas','promedio trabas'],
-  'eNPS_tag':         ['enpstag','enpscategoria','enpscat','enps_cat','enps_tag','enps tag','enps_categoria'],
+  'eNPS_tag':         ['enpstag','enpscategoria','enpscat','enps_cat','enps_tag','enps tag','enps_categoria','enpsoficial','enps_oficial'],
 };
 
 // Colores de la paleta principal
@@ -4928,7 +4939,7 @@ function rcpProcess(wb, filename) {
   const cards = RCP_DEFS.map((def,i) => {
     // Check if required columns exist (use fuzzy matching for non-standard column names)
     const available = def.requiere.every(col => {
-      if(col==='eNPS_tag') return RCP.headers.some(h=>/enps_cat|enps_tag|enps\.tag/i.test(h));
+      if(col==='eNPS_tag') return RCP.headers.some(h=>/enps_cat|enps_tag|enps\.tag|enps_oficial/i.test(h)) || RCP.headers.some(h=>/\benps\b/i.test(h));
       return rcpColIdxFuzzy(col)>=0;
     });
     const onclickAttr = available ? 'rcpSelectDef(' + i + ')' : '';
@@ -4973,10 +4984,12 @@ function renderRcpParams() {
   // Find classification columns — excluir columna de medición y columnas de dimensiones
   const claCols = RCP.headers.filter((h,idx)=>{
     if (RCP.medCol !== '__single__' && h === RCP.medCol) return false;
+    if (!h || h.length > 72) return false;
     const uniq=new Set(RCP.rows.map(r=>String(r[idx]||'').trim()).filter(Boolean));
-    return uniq.size>=2 && uniq.size<=40 &&
-      !/^(WE|EX|SE|wp|cogn|soc|emo|feedb|rolcon|hassle|coach|oppor|auto|optim)\d+$/i.test(h) &&
-      !/^(WORK|EXHAUST|SELF|OPTIM|VIGOR|ABSORT|DEDIC|SOCIAL|EMOTION|FEED|ROLE|HASS|COACH|OPPORT|AUTONOMY|COGNITIVE|ENGAGEMENT_|EXHAUSTED|INTENT|RIESGO|TOTAL|CRIT|AON|eNPS_|RUT|ID_|NOMBRE|EMAIL|FECHA)/i.test(h) &&
+    if (uniq.size<2 || uniq.size>40) return false;
+    if ([...uniq].every(v=>v==='0'||v==='1')) return false;
+    return !/^(WE|EX|SE|wp|cogn|soc|emo|feedb|rolcon|hassle|coach|oppor|auto|optim)\d+$/i.test(h) &&
+      !/^(WORK|EXHAUST|SELF|OPTIM|VIGOR|ABSORT|DEDIC|SOCIAL|EMOTION|FEED|ROLE|HASS|COACH|OPPORT|AUTONOMY|COGNITIVE|ENGAGEMENT_|EXHAUSTED|INTENT|RIESGO|TOTAL|CRIT|AON|eNPS|ALTO|OPTAGO|OPTENG|RUT|ID_|NOMBRE|EMAIL|FECHA)/i.test(h) &&
       !/^(medicion|measurement|periodo|year|año|mes|month|ola|wave)/i.test(rcpNorm(h));
   });
   const claOpts = claCols.map(c=>`<option value="${c}">${c}</option>`).join('');
@@ -5092,11 +5105,14 @@ function rcpAddBenchLine() {
 
   // Build segment columns + values
   const segCols = RCP.headers.filter((h,cidx)=>{
+    if (!h || h.length > 72) return false;
     const uniq=new Set(RCP.rows.map(r=>String(r[cidx]||'').trim()).filter(Boolean));
-    return uniq.size>=2 && uniq.size<=40 &&
-      !['MEDICION','Empresa','Sector'].includes(h) &&
+    if (uniq.size<2 || uniq.size>40) return false;
+    if ([...uniq].every(v=>v==='0'||v==='1')) return false;
+    return !['MEDICION','Empresa','Sector'].includes(h) &&
       !/^(WE|EX|SE|wp|cogn|soc|emo|feedb|rolcon|hassle|coach|oppor|auto|optim)\d+$/i.test(h) &&
-      !/^(WORK|EXHAUST|SELF|OPTIM|VIGOR|ABSORT|DEDIC|SOCIAL|EMOTION|FEED|ROLE|HASS|COACH|OPPORT|AUTONOMY|COGNITIVE)/i.test(h);
+      !/^(WORK|EXHAUST|SELF|OPTIM|VIGOR|ABSORT|DEDIC|SOCIAL|EMOTION|FEED|ROLE|HASS|COACH|OPPORT|AUTONOMY|COGNITIVE|eNPS|ALTO|OPTAGO|OPTENG|CRIT|AON)/i.test(h) &&
+      !/^(medicion|measurement|periodo|year|año|mes|month|ola|wave)/i.test(rcpNorm(h));
   });
   const segOptsHtml = segCols.length
     ? '<optgroup label="Por segmento">'+segCols.map(c=>{
@@ -5214,11 +5230,14 @@ function rcpAddRdLine() {
   const color = palette[idx % palette.length];
 
   const claCols = RCP.headers.filter((h,ci)=>{
+    if (!h || h.length > 72) return false;
     const uniq=new Set(RCP.rows.map(r=>String(r[ci]||'').trim()).filter(Boolean));
-    return uniq.size>=2 && uniq.size<=40 &&
-      !['MEDICION','Empresa','Sector'].includes(h) &&
+    if (uniq.size<2 || uniq.size>40) return false;
+    if ([...uniq].every(v=>v==='0'||v==='1')) return false;
+    return !['MEDICION','Empresa','Sector'].includes(h) &&
       !/^(WE|EX|SE|wp|cogn|soc|emo|feedb|rolcon|hassle|coach|oppor|auto|optim)\d+$/i.test(h) &&
-      !/^(WORK|EXHAUST|SELF|OPTIM|VIGOR|ABSORT|DEDIC|SOCIAL|EMOTION|FEED|ROLE|HASS|COACH|OPPORT|AUTONOMY|COGNITIVE)/i.test(h);
+      !/^(WORK|EXHAUST|SELF|OPTIM|VIGOR|ABSORT|DEDIC|SOCIAL|EMOTION|FEED|ROLE|HASS|COACH|OPPORT|AUTONOMY|COGNITIVE|eNPS|ALTO|OPTAGO|OPTENG|CRIT|AON)/i.test(h) &&
+      !/^(medicion|measurement|periodo|year|año|mes|month|ola|wave)/i.test(rcpNorm(h));
   });
   const segLineOpts = claCols.length ? '<optgroup label="Por segmento">' +
     claCols.map(c=>{
