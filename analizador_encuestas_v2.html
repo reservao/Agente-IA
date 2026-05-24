@@ -5646,7 +5646,6 @@ function rcpGenerate() {
       'WORK_PRESSURE','COGNITIVE_DEMANDS','EMOTIONAL_DEMANDS','ROLE_CONFLICT','HASSLES'
     ];
     const RD_COLORS = {
-      // keyed by col
       'OPPORTUNITIES_FOR_DEVELOPMENT': ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
       'COACH':             ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
       'FEEDBACK':          ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
@@ -5659,19 +5658,6 @@ function rcpGenerate() {
       'EMOTIONAL_DEMANDS': ['rgba(198,40,40,0.85)', 'rgba(198,40,40,1)'],
       'ROLE_CONFLICT':     ['rgba(198,40,40,0.85)', 'rgba(198,40,40,1)'],
       'HASSLES':           ['rgba(198,40,40,0.85)', 'rgba(198,40,40,1)'],
-      // fallback keyed by label (in case col fuzzy-resolves differently)
-      'Autoeficacia':              ['rgba(27,63,110,0.85)', 'rgba(27,63,110,1)'],
-      'Optimismo':                 ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
-      'Oportunidades Desarrollo':  ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
-      'Coaching del Líder':        ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
-      'Retroalimentación':         ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
-      'Colaboración':              ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
-      'Autonomía':                 ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
-      'Presión en el Trabajo':     ['rgba(239,108,0,0.85)', 'rgba(239,108,0,1)'],
-      'Demandas Cognitivas':       ['rgba(239,108,0,0.85)', 'rgba(239,108,0,1)'],
-      'Demandas Emocionales':      ['rgba(198,40,40,0.85)', 'rgba(198,40,40,1)'],
-      'Conflicto de Rol':          ['rgba(198,40,40,0.85)', 'rgba(198,40,40,1)'],
-      'Trabas en el Trabajo':      ['rgba(198,40,40,0.85)', 'rgba(198,40,40,1)'],
     };
     const allRd = ALL_DIMS.filter(d => d.tipo === 'recurso' || d.tipo === 'demanda');
     // Sort by RD_ORDER; dimensions not in the list go to the end in original order
@@ -5690,10 +5676,9 @@ function rcpGenerate() {
     }
     const mainLabel = segVal ? (segCol+': '+segVal) : med;
 
-    // Per-dimension colors — col lookup first, label fallback second
-    const rdColorFor = d => RD_COLORS[d.col] || RD_COLORS[d.label] || ['rgba(27,63,110,0.85)','rgba(27,63,110,1)'];
-    const barBg     = dims.map(d => rdColorFor(d)[0]);
-    const barBorder = dims.map(d => rdColorFor(d)[1]);
+    // Per-dimension colors
+    const barBg     = dims.map(d => (RD_COLORS[d.col] || ['rgba(27,63,110,0.85)','rgba(27,63,110,1)'])[0]);
+    const barBorder = dims.map(d => (RD_COLORS[d.col] || ['rgba(27,63,110,0.85)','rgba(27,63,110,1)'])[1]);
     const hasComp   = !!compMed;
 
     const datasets = [{
@@ -5772,17 +5757,6 @@ function rcpGenerate() {
     const nBars = dims.length;
     const valFontSize = nBars > 15 ? 8 : (nBars > 8 ? 9 : 11);
 
-    // Choose text color (black/white) based on bar background luminance
-    function rdLabelColor(bgStr) {
-      const m = (bgStr||'').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-      if(!m) return { fill:'#ffffff', stroke:'rgba(0,0,0,0.55)' };
-      const r=+m[1], g=+m[2], b=+m[3];
-      const lum = (299*r + 587*g + 114*b) / 1000; // perceived brightness 0-255
-      return lum > 145
-        ? { fill:'#1a1a1a', stroke:'rgba(255,255,255,0.6)' }   // dark text on light bg
-        : { fill:'#ffffff',  stroke:'rgba(0,0,0,0.6)' };        // white text on dark bg
-    }
-
     const rdValueLabels = {
       id: 'rdValueLabels',
       afterDatasetsDraw(chart) {
@@ -5793,9 +5767,6 @@ function rcpGenerate() {
           if(ds.type === 'line') return;
           const meta = chart.getDatasetMeta(di);
           if(meta.hidden) return;
-          // Determine text color from this dataset's background
-          const bgSample = Array.isArray(ds.backgroundColor) ? ds.backgroundColor[0] : ds.backgroundColor;
-          const { fill, stroke } = rdLabelColor(bgSample);
           meta.data.forEach((bar, i) => {
             const v = ds.data[i];
             if(v === null || v === undefined) return;
@@ -5806,14 +5777,12 @@ function rcpGenerate() {
             ctx.font = `600 ${valFontSize}px "DM Sans", sans-serif`;
             ctx.textAlign = 'center';
             if(barH > 22) {
-              ctx.lineWidth = 3;
-              ctx.lineJoin = 'round';
-              ctx.strokeStyle = stroke;
+              // Inside bar near base — same as engagement
+              ctx.fillStyle = 'rgba(255,255,255,0.92)';
               ctx.textBaseline = 'bottom';
-              ctx.strokeText(txt, bar.x, base - 4);
-              ctx.fillStyle = fill;
               ctx.fillText(txt, bar.x, base - 4);
             } else {
+              // Bar too short: place above it
               ctx.fillStyle = '#444';
               ctx.textBaseline = 'bottom';
               ctx.fillText(txt, bar.x, bar.y - 2);
