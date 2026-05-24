@@ -5848,9 +5848,9 @@ function rcpGenerate() {
         const rows=medRows.filter(r=>String(r[segIdx]||'').trim()===g);
         const tags=rows.map(r=>String(r[tagIdx]||'').trim()).filter(Boolean);
         const n=tags.length||1;
-        promoD.push(+(tags.filter(t=>t==='Promotor').length/n*100).toFixed(1));
-        neutroD.push(+(tags.filter(t=>t==='Neutro').length/n*100).toFixed(1));
-        detrD.push(+(tags.filter(t=>t==='Detractor').length/n*100).toFixed(1));
+        promoD.push(+(tags.filter(t=>/^promotor/i.test(t)).length/n*100).toFixed(1));
+        neutroD.push(+(tags.filter(t=>/^neutro|^pasivo/i.test(t)).length/n*100).toFixed(1));
+        detrD.push(+(tags.filter(t=>/^detractor/i.test(t)).length/n*100).toFixed(1));
       });
     } else {
       labels=meds;
@@ -5858,9 +5858,9 @@ function rcpGenerate() {
         const rows=rcpRowsByMed(m);
         const tags=rows.map(r=>String(r[tagIdx]||'').trim()).filter(Boolean);
         const n=tags.length||1;
-        promoD.push(+(tags.filter(t=>t==='Promotor').length/n*100).toFixed(1));
-        neutroD.push(+(tags.filter(t=>t==='Neutro').length/n*100).toFixed(1));
-        detrD.push(+(tags.filter(t=>t==='Detractor').length/n*100).toFixed(1));
+        promoD.push(+(tags.filter(t=>/^promotor/i.test(t)).length/n*100).toFixed(1));
+        neutroD.push(+(tags.filter(t=>/^neutro|^pasivo/i.test(t)).length/n*100).toFixed(1));
+        detrD.push(+(tags.filter(t=>/^detractor/i.test(t)).length/n*100).toFixed(1));
       });
     }
     const ds=[
