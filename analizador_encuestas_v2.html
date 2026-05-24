@@ -5776,7 +5776,8 @@ function rcpGenerate() {
             ctx.save();
             ctx.font = `600 ${valFontSize}px "DM Sans", sans-serif`;
             ctx.textAlign = 'center';
-            ctx.fillStyle = '#1a1a1a';
+            const barBgColor = Array.isArray(ds.backgroundColor) ? ds.backgroundColor[i] : ds.backgroundColor;
+            ctx.fillStyle = (barBgColor||'').includes('27,63,110') ? '#ffffff' : '#1a1a1a';
             ctx.textBaseline = 'bottom';
             if(barH > 22) {
               ctx.fillText(txt, bar.x, base - 4);
