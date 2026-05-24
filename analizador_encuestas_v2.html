@@ -5651,7 +5651,7 @@ function rcpGenerate() {
       'FEEDBACK':          ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
       'SOCIAL_SUPPORT':    ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
       'AUTONOMY':          ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
-      'OPTIMISM':          ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
+      'OPTIMISM':          ['rgba(27,63,110,0.85)', 'rgba(27,63,110,1)'],
       'SELF_EFFICACY':     ['rgba(27,63,110,0.85)', 'rgba(27,63,110,1)'],
       'WORK_PRESSURE':     ['rgba(239,108,0,0.85)', 'rgba(239,108,0,1)'],
       'COGNITIVE_DEMANDS': ['rgba(239,108,0,0.85)', 'rgba(239,108,0,1)'],
@@ -5776,15 +5776,11 @@ function rcpGenerate() {
             ctx.save();
             ctx.font = `600 ${valFontSize}px "DM Sans", sans-serif`;
             ctx.textAlign = 'center';
+            ctx.fillStyle = '#1a1a1a';
+            ctx.textBaseline = 'bottom';
             if(barH > 22) {
-              // Inside bar near base — same as engagement
-              ctx.fillStyle = 'rgba(255,255,255,0.92)';
-              ctx.textBaseline = 'bottom';
               ctx.fillText(txt, bar.x, base - 4);
             } else {
-              // Bar too short: place above it
-              ctx.fillStyle = '#444';
-              ctx.textBaseline = 'bottom';
               ctx.fillText(txt, bar.x, bar.y - 2);
             }
             ctx.restore();
