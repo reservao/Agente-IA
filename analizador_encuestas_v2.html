@@ -5639,7 +5639,33 @@ function rcpGenerate() {
     }
 
     // Only recurso + demanda (exclude resultado: engagement, agotamiento)
-    const dims = ALL_DIMS.filter(d => d.tipo === 'recurso' || d.tipo === 'demanda');
+    // Custom order matching reference design
+    const RD_ORDER = [
+      'OPPORTUNITIES_FOR_DEVELOPMENT','COACH','FEEDBACK','SOCIAL_SUPPORT','AUTONOMY',
+      'OPTIMISM','SELF_EFFICACY',
+      'WORK_PRESSURE','COGNITIVE_DEMANDS','EMOTIONAL_DEMANDS','ROLE_CONFLICT','HASSLES'
+    ];
+    const RD_COLORS = {
+      'OPPORTUNITIES_FOR_DEVELOPMENT': ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
+      'COACH':             ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
+      'FEEDBACK':          ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
+      'SOCIAL_SUPPORT':    ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
+      'AUTONOMY':          ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
+      'OPTIMISM':          ['rgba(33,150,243,0.85)','rgba(33,150,243,1)'],
+      'SELF_EFFICACY':     ['rgba(27,63,110,0.85)', 'rgba(27,63,110,1)'],
+      'WORK_PRESSURE':     ['rgba(239,108,0,0.85)', 'rgba(239,108,0,1)'],
+      'COGNITIVE_DEMANDS': ['rgba(239,108,0,0.85)', 'rgba(239,108,0,1)'],
+      'EMOTIONAL_DEMANDS': ['rgba(198,40,40,0.85)', 'rgba(198,40,40,1)'],
+      'ROLE_CONFLICT':     ['rgba(198,40,40,0.85)', 'rgba(198,40,40,1)'],
+      'HASSLES':           ['rgba(198,40,40,0.85)', 'rgba(198,40,40,1)'],
+    };
+    const allRd = ALL_DIMS.filter(d => d.tipo === 'recurso' || d.tipo === 'demanda');
+    // Sort by RD_ORDER; dimensions not in the list go to the end in original order
+    const dims = [...allRd].sort((a,b) => {
+      const ia = RD_ORDER.indexOf(a.col), ib = RD_ORDER.indexOf(b.col);
+      const wa = ia < 0 ? 999 : ia, wb = ib < 0 ? 999 : ib;
+      return wa - wb;
+    });
     const labels = dims.map(d => d.label);
 
     // Main rows
@@ -5650,9 +5676,9 @@ function rcpGenerate() {
     }
     const mainLabel = segVal ? (segCol+': '+segVal) : med;
 
-    // Color per dimension type
-    const barBg     = dims.map(d => d.tipo==='recurso' ? 'rgba(27,63,110,0.85)' : 'rgba(168,68,43,0.85)');
-    const barBorder = dims.map(d => d.tipo==='recurso' ? 'rgba(27,63,110,1)'    : 'rgba(168,68,43,1)');
+    // Per-dimension colors
+    const barBg     = dims.map(d => (RD_COLORS[d.col] || ['rgba(27,63,110,0.85)','rgba(27,63,110,1)'])[0]);
+    const barBorder = dims.map(d => (RD_COLORS[d.col] || ['rgba(27,63,110,0.85)','rgba(27,63,110,1)'])[1]);
     const hasComp   = !!compMed;
 
     const datasets = [{
