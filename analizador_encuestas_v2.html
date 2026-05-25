@@ -5878,16 +5878,19 @@ function rcpGenerate() {
         d:+(cats.filter(c=>c==='d').length/n*100).toFixed(1)
       };
     }
-    if(seg) {
+    if(seg && seg !== '__org__') {
       const segIdx=RCP.headers.indexOf(seg);
-      const grps=[...new Set(RCP.rows.map(r=>String(r[segIdx]||'').trim()).filter(Boolean))].sort();
+      const allMedRows=meds.flatMap(m=>rcpRowsByMed(m));
+      const grps=[...new Set(allMedRows.map(r=>String(r[segIdx]||'').trim()).filter(Boolean))].sort();
       labels=grps;
-      const med=meds[meds.length-1];
-      const medRows=rcpRowsByMed(med);
       grps.forEach(g=>{
-        const rows=medRows.filter(r=>String(r[segIdx]||'').trim()===g);
+        const rows=allMedRows.filter(r=>String(r[segIdx]||'').trim()===g);
         const e=enpsCalc(rows); promoD.push(e.p); neutroD.push(e.n); detrD.push(e.d);
       });
+    } else if(seg === '__org__') {
+      labels=['Organización'];
+      const allRows=meds.flatMap(m=>rcpRowsByMed(m));
+      const e=enpsCalc(allRows); promoD.push(e.p); neutroD.push(e.n); detrD.push(e.d);
     } else {
       labels=meds;
       meds.forEach(m=>{
