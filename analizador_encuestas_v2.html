@@ -6803,12 +6803,12 @@ function rcpGenerate() {
         backgroundColor: c => mkGrad(engC, c.chart),
         borderWidth:0,
         borderRadius:{ topLeft:0, topRight:7, bottomLeft:0, bottomRight:7 },
-        borderSkipped:false, categoryPercentage:0.85, barPercentage:0.72 },
+        borderSkipped:false, categoryPercentage:0.85, barPercentage:1.0 },
       { label:'Agotamiento', data:data.map(d=>d.ago),
         backgroundColor: c => mkGrad(agoC, c.chart),
         borderWidth:0,
         borderRadius:{ topLeft:0, topRight:7, bottomLeft:0, bottomRight:7 },
-        borderSkipped:false, categoryPercentage:0.85, barPercentage:0.72 },
+        borderSkipped:false, categoryPercentage:0.85, barPercentage:1.0 },
     ];
     // Adaptive canvas height
     const canvasEl2 = document.getElementById('rcp-canvas');
