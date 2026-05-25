@@ -4676,19 +4676,22 @@ function rcGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RC._chartState; if (!state) return;
+      const rect = chart.canvas.getBoundingClientRect();
+      const ex = (event.clientX ?? event.x) - rect.left;
+      const ey = (event.clientY ?? event.y) - rect.top;
       if (state.horizontal) {
-        const scaleY = chart.scales.y; if (!scaleY || (chart.chartArea && event.x >= chart.chartArea.left)) return;
+        const scaleY = chart.scales.y; if (!scaleY || (chart.chartArea && ex >= chart.chartArea.left)) return;
         let closest=-1, minDist=Infinity;
-        scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-event.y);if(d<minDist){minDist=d;closest=i;}});
+        scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-ey);if(d<minDist){minDist=d;closest=i;}});
         if(closest<0||minDist>28) return;
         const lbl=state.currentLabels?.[closest]; if(!lbl) return;
         if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
       } else {
         const scaleX = chart.scales.x; if (!scaleX) return;
         const bottom = chart.chartArea?.bottom;
-        if (bottom !== undefined && event.y < bottom) return;
+        if (bottom !== undefined && ey < bottom) return;
         let closest=-1, minDist=Infinity;
-        scaleX.ticks.forEach((tick,i)=>{const px=scaleX.getPixelForTick(i),d=Math.abs(px-event.x);if(d<minDist){minDist=d;closest=i;}});
+        scaleX.ticks.forEach((tick,i)=>{const px=scaleX.getPixelForTick(i),d=Math.abs(px-ex);if(d<minDist){minDist=d;closest=i;}});
         if(closest<0||minDist>40) return;
         const lbl=state.currentLabels?.[closest]; if(!lbl) return;
         if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
@@ -6016,14 +6019,17 @@ function rcpGenerate() {
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState;
       if (!state) return;
+      const rect = chart.canvas.getBoundingClientRect();
+      const ex = (event.clientX ?? event.x) - rect.left;
+      const ey = (event.clientY ?? event.y) - rect.top;
       const scaleX = chart.scales.x;
       if (!scaleX) return;
       const bottom = chart.chartArea?.bottom;
-      if (bottom !== undefined && event.y < bottom) return;
+      if (bottom !== undefined && ey < bottom) return;
       let closest = -1, minDist = Infinity;
       scaleX.ticks.forEach((tick, i) => {
         const px = scaleX.getPixelForTick(i);
-        const d = Math.abs(px - event.x);
+        const d = Math.abs(px - ex);
         if (d < minDist) { minDist = d; closest = i; }
       });
       if (closest < 0 || minDist > 40) return;
@@ -6116,11 +6122,14 @@ function rcpGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState; if (!state) return;
+      const rect = chart.canvas.getBoundingClientRect();
+      const ex = (event.clientX ?? event.x) - rect.left;
+      const ey = (event.clientY ?? event.y) - rect.top;
       const scaleX = chart.scales.x; if (!scaleX) return;
       const bottom = chart.chartArea?.bottom;
-      if (bottom !== undefined && event.y < bottom) return;
+      if (bottom !== undefined && ey < bottom) return;
       let closest=-1, minDist=Infinity;
-      scaleX.ticks.forEach((tick,i)=>{const px=scaleX.getPixelForTick(i),d=Math.abs(px-event.x);if(d<minDist){minDist=d;closest=i;}});
+      scaleX.ticks.forEach((tick,i)=>{const px=scaleX.getPixelForTick(i),d=Math.abs(px-ex);if(d<minDist){minDist=d;closest=i;}});
       if(closest<0||minDist>40) return;
       const lbl=state.currentLabels?.[closest]; if(!lbl) return;
       if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
@@ -6362,11 +6371,14 @@ function rcpGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState; if (!state) return;
+      const rect = chart.canvas.getBoundingClientRect();
+      const ex = (event.clientX ?? event.x) - rect.left;
+      const ey = (event.clientY ?? event.y) - rect.top;
       const scaleX = chart.scales.x; if (!scaleX) return;
       const bottom = chart.chartArea?.bottom;
-      if (bottom !== undefined && event.y < bottom) return;
+      if (bottom !== undefined && ey < bottom) return;
       let closest=-1, minDist=Infinity;
-      scaleX.ticks.forEach((tick,i)=>{const px=scaleX.getPixelForTick(i),d=Math.abs(px-event.x);if(d<minDist){minDist=d;closest=i;}});
+      scaleX.ticks.forEach((tick,i)=>{const px=scaleX.getPixelForTick(i),d=Math.abs(px-ex);if(d<minDist){minDist=d;closest=i;}});
       if(closest<0||minDist>40) return;
       const lbl=state.currentLabels?.[closest]; if(!lbl) return;
       if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
@@ -6515,14 +6527,17 @@ function rcpGenerate() {
       onClick: (event, elements, chart) => {
         const state = RCP._enpsState;
         if(!state) return;
+        const rect = chart.canvas.getBoundingClientRect();
+        const ex = (event.clientX ?? event.x) - rect.left;
+        const ey = (event.clientY ?? event.y) - rect.top;
         const scaleY = chart.scales.y;
         // Click must be in the y-axis label area (left of the plot)
-        if(!scaleY || (chart.chartArea && event.x >= chart.chartArea.left)) return;
+        if(!scaleY || (chart.chartArea && ex >= chart.chartArea.left)) return;
         // Find closest tick by y-pixel
         let closest = -1, minDist = Infinity;
         scaleY.ticks.forEach((tick, i) => {
           const py = scaleY.getPixelForTick(i);
-          const d  = Math.abs(py - event.y);
+          const d  = Math.abs(py - ey);
           if(d < minDist) { minDist = d; closest = i; }
         });
         if(closest < 0 || minDist > 28) return;
@@ -6597,9 +6612,12 @@ function rcpGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState; if (!state) return;
-      const scaleY = chart.scales.y; if (!scaleY || (chart.chartArea && event.x >= chart.chartArea.left)) return;
+      const rect = chart.canvas.getBoundingClientRect();
+      const ex = (event.clientX ?? event.x) - rect.left;
+      const ey = (event.clientY ?? event.y) - rect.top;
+      const scaleY = chart.scales.y; if (!scaleY || (chart.chartArea && ex >= chart.chartArea.left)) return;
       let closest=-1, minDist=Infinity;
-      scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-event.y);if(d<minDist){minDist=d;closest=i;}});
+      scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-ey);if(d<minDist){minDist=d;closest=i;}});
       if(closest<0||minDist>28) return;
       const lbl=state.currentLabels?.[closest]; if(!lbl) return;
       if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
@@ -6647,11 +6665,14 @@ function rcpGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState; if (!state) return;
+      const rect = chart.canvas.getBoundingClientRect();
+      const ex = (event.clientX ?? event.x) - rect.left;
+      const ey = (event.clientY ?? event.y) - rect.top;
       const scaleX = chart.scales.x; if (!scaleX) return;
       const bottom = chart.chartArea?.bottom;
-      if (bottom !== undefined && event.y < bottom) return;
+      if (bottom !== undefined && ey < bottom) return;
       let closest=-1, minDist=Infinity;
-      scaleX.ticks.forEach((tick,i)=>{const px=scaleX.getPixelForTick(i),d=Math.abs(px-event.x);if(d<minDist){minDist=d;closest=i;}});
+      scaleX.ticks.forEach((tick,i)=>{const px=scaleX.getPixelForTick(i),d=Math.abs(px-ex);if(d<minDist){minDist=d;closest=i;}});
       if(closest<0||minDist>40) return;
       const lbl=state.currentLabels?.[closest]; if(!lbl) return;
       if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
@@ -6695,9 +6716,12 @@ function rcpGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState; if (!state) return;
-      const scaleY = chart.scales.y; if (!scaleY || (chart.chartArea && event.x >= chart.chartArea.left)) return;
+      const rect = chart.canvas.getBoundingClientRect();
+      const ex = (event.clientX ?? event.x) - rect.left;
+      const ey = (event.clientY ?? event.y) - rect.top;
+      const scaleY = chart.scales.y; if (!scaleY || (chart.chartArea && ex >= chart.chartArea.left)) return;
       let closest=-1, minDist=Infinity;
-      scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-event.y);if(d<minDist){minDist=d;closest=i;}});
+      scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-ey);if(d<minDist){minDist=d;closest=i;}});
       if(closest<0||minDist>28) return;
       const lbl=state.currentLabels?.[closest]; if(!lbl) return;
       if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
