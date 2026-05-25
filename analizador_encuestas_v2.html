@@ -4676,9 +4676,8 @@ function rcGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RC._chartState; if (!state) return;
-      const rect = chart.canvas.getBoundingClientRect();
-      const ex = (event.clientX ?? event.x) - rect.left;
-      const ey = (event.clientY ?? event.y) - rect.top;
+      const ex = event.native ? event.native.offsetX : (event.offsetX ?? event.x);
+      const ey = event.native ? event.native.offsetY : (event.offsetY ?? event.y);
       if (state.horizontal) {
         const scaleY = chart.scales.y; if (!scaleY || (chart.chartArea && ex >= chart.chartArea.left)) return;
         let closest=-1, minDist=Infinity;
@@ -6019,9 +6018,8 @@ function rcpGenerate() {
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState;
       if (!state) return;
-      const rect = chart.canvas.getBoundingClientRect();
-      const ex = (event.clientX ?? event.x) - rect.left;
-      const ey = (event.clientY ?? event.y) - rect.top;
+      const ex = event.native ? event.native.offsetX : (event.offsetX ?? event.x);
+      const ey = event.native ? event.native.offsetY : (event.offsetY ?? event.y);
       const scaleX = chart.scales.x;
       if (!scaleX) return;
       const bottom = chart.chartArea?.bottom;
@@ -6122,9 +6120,8 @@ function rcpGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState; if (!state) return;
-      const rect = chart.canvas.getBoundingClientRect();
-      const ex = (event.clientX ?? event.x) - rect.left;
-      const ey = (event.clientY ?? event.y) - rect.top;
+      const ex = event.native ? event.native.offsetX : (event.offsetX ?? event.x);
+      const ey = event.native ? event.native.offsetY : (event.offsetY ?? event.y);
       const scaleX = chart.scales.x; if (!scaleX) return;
       const bottom = chart.chartArea?.bottom;
       if (bottom !== undefined && ey < bottom) return;
@@ -6371,9 +6368,8 @@ function rcpGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState; if (!state) return;
-      const rect = chart.canvas.getBoundingClientRect();
-      const ex = (event.clientX ?? event.x) - rect.left;
-      const ey = (event.clientY ?? event.y) - rect.top;
+      const ex = event.native ? event.native.offsetX : (event.offsetX ?? event.x);
+      const ey = event.native ? event.native.offsetY : (event.offsetY ?? event.y);
       const scaleX = chart.scales.x; if (!scaleX) return;
       const bottom = chart.chartArea?.bottom;
       if (bottom !== undefined && ey < bottom) return;
@@ -6486,11 +6482,19 @@ function rcpGenerate() {
     // Adaptive y-axis font size
     const tickFontSize = groups.length > 20 ? 9 : groups.length > 12 ? 10 : 11;
 
-    // Plugin: % value labels inside each bar
+    // Plugin: % value labels inside each bar + "Confidencial" overlay for nmin-filtered rows
     const enpsValueLabels = {
       id: 'enpsValueLabels',
       afterDatasetsDraw(chart) {
         const ctx = chart.ctx;
+        // Track which row indices have all-null data (nmin filtered)
+        const numRows = chart.data.labels.length;
+        const nullRows = new Set();
+        const barDatasets = chart.data.datasets.filter(d => d.type !== 'line');
+        for(let i = 0; i < numRows; i++) {
+          if(barDatasets.length > 0 && barDatasets.every(d => d.data[i] === null)) nullRows.add(i);
+        }
+
         chart.data.datasets.forEach((ds, di) => {
           if(ds.type === 'line') return;
           const meta = chart.getDatasetMeta(di);
@@ -6510,6 +6514,22 @@ function rcpGenerate() {
             ctx.restore();
           });
         });
+
+        // Draw "Confidencial (N < mín)" text for nmin-filtered rows — once per row
+        if(nullRows.size === 0) return;
+        const scaleY = chart.scales.y;
+        const ca = chart.chartArea;
+        if(!scaleY || !ca) return;
+        ctx.save();
+        ctx.font = 'italic 10px "DM Sans",sans-serif';
+        ctx.fillStyle = '#888';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        nullRows.forEach(i => {
+          const py = scaleY.getPixelForTick(i);
+          ctx.fillText('Confidencial (N bajo mínimo)', ca.left + 6, py);
+        });
+        ctx.restore();
       }
     };
 
@@ -6527,9 +6547,8 @@ function rcpGenerate() {
       onClick: (event, elements, chart) => {
         const state = RCP._enpsState;
         if(!state) return;
-        const rect = chart.canvas.getBoundingClientRect();
-        const ex = (event.clientX ?? event.x) - rect.left;
-        const ey = (event.clientY ?? event.y) - rect.top;
+        const ex = event.native ? event.native.offsetX : (event.offsetX ?? event.x);
+        const ey = event.native ? event.native.offsetY : (event.offsetY ?? event.y);
         const scaleY = chart.scales.y;
         // Click must be in the y-axis label area (left of the plot)
         if(!scaleY || (chart.chartArea && ex >= chart.chartArea.left)) return;
@@ -6612,9 +6631,8 @@ function rcpGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState; if (!state) return;
-      const rect = chart.canvas.getBoundingClientRect();
-      const ex = (event.clientX ?? event.x) - rect.left;
-      const ey = (event.clientY ?? event.y) - rect.top;
+      const ex = event.native ? event.native.offsetX : (event.offsetX ?? event.x);
+      const ey = event.native ? event.native.offsetY : (event.offsetY ?? event.y);
       const scaleY = chart.scales.y; if (!scaleY || (chart.chartArea && ex >= chart.chartArea.left)) return;
       let closest=-1, minDist=Infinity;
       scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-ey);if(d<minDist){minDist=d;closest=i;}});
@@ -6665,9 +6683,8 @@ function rcpGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState; if (!state) return;
-      const rect = chart.canvas.getBoundingClientRect();
-      const ex = (event.clientX ?? event.x) - rect.left;
-      const ey = (event.clientY ?? event.y) - rect.top;
+      const ex = event.native ? event.native.offsetX : (event.offsetX ?? event.x);
+      const ey = event.native ? event.native.offsetY : (event.offsetY ?? event.y);
       const scaleX = chart.scales.x; if (!scaleX) return;
       const bottom = chart.chartArea?.bottom;
       if (bottom !== undefined && ey < bottom) return;
@@ -6716,9 +6733,8 @@ function rcpGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState; if (!state) return;
-      const rect = chart.canvas.getBoundingClientRect();
-      const ex = (event.clientX ?? event.x) - rect.left;
-      const ey = (event.clientY ?? event.y) - rect.top;
+      const ex = event.native ? event.native.offsetX : (event.offsetX ?? event.x);
+      const ey = event.native ? event.native.offsetY : (event.offsetY ?? event.y);
       const scaleY = chart.scales.y; if (!scaleY || (chart.chartArea && ex >= chart.chartArea.left)) return;
       let closest=-1, minDist=Infinity;
       scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-ey);if(d<minDist){minDist=d;closest=i;}});
