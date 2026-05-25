@@ -6001,12 +6001,12 @@ function rcpGenerate() {
           },
           y: {
             min: yMin, max: yMax,
-            grid: { color:'rgba(0,0,0,0.06)' },
+            grid: { display:false }, border: { display:false },
             ticks: { font:{size:10}, stepSize: isEng ? 1 : 0.5 }
           },
           y2: {
             position: 'right', min: 0, max: 100,
-            grid: { drawOnChartArea: false },
+            grid: { drawOnChartArea: false }, border: { display:false },
             ticks: { font:{size:10}, color: dotColor, callback: v => v+'%', stepSize: 20 }
           }
         },
@@ -6189,7 +6189,7 @@ function rcpGenerate() {
           },
           y: {
             min: 0, max: 6,
-            grid: { color: 'rgba(0,0,0,0.04)' },
+            grid: { display: false }, border: { display: false },
             ticks: { font: { size: 10 } }
           }
         },
@@ -6458,7 +6458,7 @@ function rcpGenerate() {
               }
             }
           },
-          y: { min:1, max:5, grid:{color:'rgba(0,0,0,0.04)'}, ticks:{font:{size:10},stepSize:0.5} }
+          y: { min:1, max:5, grid:{display:false}, border:{display:false}, ticks:{font:{size:10},stepSize:0.5} }
         },
         animation: { duration:400 }
       },
@@ -6890,16 +6890,22 @@ function rcpBaseOptions(title, stacked, yAxis) {
       legend:{position:'bottom', labels:{font:{size:11},padding:14}},
     },
     scales:{
-      x:{stacked:!!stacked, grid:{color:'rgba(0,0,0,0.04)'}, ticks:{font:{size:10}}},
-      y:{stacked:!!stacked, grid:{color:'rgba(0,0,0,0.04)'}, ticks:{font:{size:10},callback:yAxis?.callback||undefined},
+      x:{stacked:!!stacked, grid:{display:false}, border:{display:false}, ticks:{font:{size:10}}},
+      y:{stacked:!!stacked, grid:{display:false}, border:{display:false}, ticks:{font:{size:10},callback:yAxis?.callback||undefined},
          min:yAxis?.min, max:yAxis?.max}
     },
     animation:{duration:400}
   };
 }
-function rcpBarChart(labels, datasets, title, horizontal, yAxis) {
-  return { type:'bar', data:{labels,datasets},
-    options:{...rcpBaseOptions(title, false, yAxis), indexAxis: horizontal?'y':'x'} };
+function rcpBarChart(labels, datasets, title, horizontal, axisOpts) {
+  const baseOpts = rcpBaseOptions(title, false);
+  if (axisOpts) {
+    const vScale = horizontal ? 'x' : 'y';
+    if (axisOpts.min !== undefined) baseOpts.scales[vScale].min = axisOpts.min;
+    if (axisOpts.max !== undefined) baseOpts.scales[vScale].max = axisOpts.max;
+    if (axisOpts.callback) baseOpts.scales[vScale].ticks = { ...baseOpts.scales[vScale].ticks, callback: axisOpts.callback };
+  }
+  return { type:'bar', data:{labels,datasets}, options:{...baseOpts, indexAxis: horizontal?'y':'x'} };
 }
 
 function rcpSetChartWidth(w) {
