@@ -4677,7 +4677,7 @@ function rcGenerate() {
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RC._chartState; if (!state) return;
       if (state.horizontal) {
-        const scaleY = chart.scales.y; if (!scaleY || event.x > scaleY.left) return;
+        const scaleY = chart.scales.y; if (!scaleY || (chart.chartArea && event.x >= chart.chartArea.left)) return;
         let closest=-1, minDist=Infinity;
         scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-event.y);if(d<minDist){minDist=d;closest=i;}});
         if(closest<0||minDist>28) return;
@@ -6517,7 +6517,7 @@ function rcpGenerate() {
         if(!state) return;
         const scaleY = chart.scales.y;
         // Click must be in the y-axis label area (left of the plot)
-        if(!scaleY || event.x > scaleY.left) return;
+        if(!scaleY || (chart.chartArea && event.x >= chart.chartArea.left)) return;
         // Find closest tick by y-pixel
         let closest = -1, minDist = Infinity;
         scaleY.ticks.forEach((tick, i) => {
@@ -6597,7 +6597,7 @@ function rcpGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState; if (!state) return;
-      const scaleY = chart.scales.y; if (!scaleY || event.x > scaleY.left) return;
+      const scaleY = chart.scales.y; if (!scaleY || (chart.chartArea && event.x >= chart.chartArea.left)) return;
       let closest=-1, minDist=Infinity;
       scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-event.y);if(d<minDist){minDist=d;closest=i;}});
       if(closest<0||minDist>28) return;
@@ -6695,7 +6695,7 @@ function rcpGenerate() {
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState; if (!state) return;
-      const scaleY = chart.scales.y; if (!scaleY || event.x > scaleY.left) return;
+      const scaleY = chart.scales.y; if (!scaleY || (chart.chartArea && event.x >= chart.chartArea.left)) return;
       let closest=-1, minDist=Infinity;
       scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-event.y);if(d<minDist){minDist=d;closest=i;}});
       if(closest<0||minDist>28) return;
