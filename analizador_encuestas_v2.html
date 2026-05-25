@@ -4701,7 +4701,12 @@ function rcGenerate() {
     RC._chartState = null;
   }
 
+  const rcCanvasForListener = document.getElementById('rc-canvas');
+  if (rcCanvasForListener) rcCanvasForListener.removeEventListener('click', rcNativeCanvasClick);
   RC.chart = new Chart(ctx, chartCfg);
+  if (rcCanvasForListener && RC._chartState) {
+    rcCanvasForListener.addEventListener('click', rcNativeCanvasClick);
+  }
   document.getElementById('rc-preview-title').textContent = title || 'Gráfico generado';
   document.getElementById('rc-preview-wrap').style.display = 'block';
   document.getElementById('rc-preview-wrap').scrollIntoView({behavior:'smooth'});
@@ -5533,6 +5538,94 @@ function rcpEnpsRefresh() {
   RCP.chart.update();
 }
 
+// ── Native canvas click handlers for axis-label click-to-hide ──────────────
+// Chart.js 4 only fires options.onClick inside the plot area (chartArea).
+// Clicks on axis tick labels (outside chartArea) require native DOM listeners.
+
+function rcpNativeCanvasClick(e) {
+  const chart = RCP.chart;
+  if (!chart || !chart.chartArea) return;
+  const ex = e.offsetX, ey = e.offsetY;
+  const ca = chart.chartArea;
+
+  if (RCP._enpsState) {
+    // Horizontal eNPS: y-axis labels are LEFT of chartArea
+    if (ex >= ca.left) return;
+    const scaleY = chart.scales.y;
+    if (!scaleY) return;
+    let closest = -1, minDist = Infinity;
+    scaleY.ticks.forEach((t, i) => { const d = Math.abs(scaleY.getPixelForTick(i) - ey); if (d < minDist) { minDist = d; closest = i; } });
+    if (closest < 0 || minDist > 28) return;
+    const lbl = RCP._enpsState.currentLabels?.[closest];
+    if (!lbl) return;
+    if (RCP._enpsState.hiddenLabels.has(lbl)) RCP._enpsState.hiddenLabels.delete(lbl);
+    else RCP._enpsState.hiddenLabels.add(lbl);
+    rcpEnpsRefresh();
+  } else if (RCP._chartState) {
+    const state = RCP._chartState;
+    if (state.horizontal) {
+      // Horizontal chart: y-axis labels LEFT of chartArea
+      if (ex >= ca.left) return;
+      const scaleY = chart.scales.y;
+      if (!scaleY) return;
+      let closest = -1, minDist = Infinity;
+      scaleY.ticks.forEach((t, i) => { const d = Math.abs(scaleY.getPixelForTick(i) - ey); if (d < minDist) { minDist = d; closest = i; } });
+      if (closest < 0 || minDist > 28) return;
+      const lbl = state.currentLabels?.[closest];
+      if (!lbl) return;
+      if (state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl);
+      else state.hiddenLabels.add(lbl);
+      rcpChartRefresh();
+    } else {
+      // Vertical chart: x-axis labels BELOW chartArea
+      if (ey <= ca.bottom) return;
+      const scaleX = chart.scales.x;
+      if (!scaleX) return;
+      let closest = -1, minDist = Infinity;
+      scaleX.ticks.forEach((t, i) => { const d = Math.abs(scaleX.getPixelForTick(i) - ex); if (d < minDist) { minDist = d; closest = i; } });
+      if (closest < 0 || minDist > 40) return;
+      const lbl = state.currentLabels?.[closest];
+      if (!lbl) return;
+      if (state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl);
+      else state.hiddenLabels.add(lbl);
+      rcpChartRefresh();
+    }
+  }
+}
+
+function rcNativeCanvasClick(e) {
+  const chart = RC.chart;
+  const state = RC._chartState;
+  if (!chart || !state || !chart.chartArea) return;
+  const ex = e.offsetX, ey = e.offsetY;
+  const ca = chart.chartArea;
+  if (state.horizontal) {
+    if (ex >= ca.left) return;
+    const scaleY = chart.scales.y;
+    if (!scaleY) return;
+    let closest = -1, minDist = Infinity;
+    scaleY.ticks.forEach((t, i) => { const d = Math.abs(scaleY.getPixelForTick(i) - ey); if (d < minDist) { minDist = d; closest = i; } });
+    if (closest < 0 || minDist > 28) return;
+    const lbl = state.currentLabels?.[closest];
+    if (!lbl) return;
+    if (state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl);
+    else state.hiddenLabels.add(lbl);
+    rcChartRefresh();
+  } else {
+    if (ey <= ca.bottom) return;
+    const scaleX = chart.scales.x;
+    if (!scaleX) return;
+    let closest = -1, minDist = Infinity;
+    scaleX.ticks.forEach((t, i) => { const d = Math.abs(scaleX.getPixelForTick(i) - ex); if (d < minDist) { minDist = d; closest = i; } });
+    if (closest < 0 || minDist > 40) return;
+    const lbl = state.currentLabels?.[closest];
+    if (!lbl) return;
+    if (state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl);
+    else state.hiddenLabels.add(lbl);
+    rcChartRefresh();
+  }
+}
+
 // ── Generic chart state helpers (non-eNPS charts) ─────────────────────────
 function rcpChartRestoreAll() {
   if (!RCP._chartState) return;
@@ -5690,7 +5783,9 @@ function rcpGenerate() {
 
   if(RCP.chart){RCP.chart.destroy();RCP.chart=null;}
   RCP._chartState = null;
+  RCP._enpsState = null;
   const rcpCanvas = document.getElementById('rcp-canvas');
+  if (rcpCanvas) rcpCanvas.removeEventListener('click', rcpNativeCanvasClick);
   if (!rcpCanvas) { console.error('rcp-canvas not found'); return; }
   const ctx = rcpCanvas.getContext('2d');
 
@@ -6758,7 +6853,14 @@ function rcpGenerate() {
   }
 
   if(!chartCfg) return;
+  // Remove stale native listener before creating new chart
+  const rcpCanvasEl = document.getElementById('rcp-canvas');
+  if (rcpCanvasEl) rcpCanvasEl.removeEventListener('click', rcpNativeCanvasClick);
   RCP.chart = new Chart(ctx, chartCfg);
+  // Native listener fires for ALL canvas clicks including axis label area
+  if (rcpCanvasEl && (RCP._chartState || RCP._enpsState)) {
+    rcpCanvasEl.addEventListener('click', rcpNativeCanvasClick);
+  }
   document.getElementById('rcp-preview-lbl').textContent = def.nombre;
   document.getElementById('rcp-preview-wrap').style.display='block';
   document.getElementById('rcp-preview-wrap').scrollIntoView({behavior:'smooth'});
