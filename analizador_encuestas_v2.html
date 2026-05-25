@@ -4766,6 +4766,8 @@ const RCP_DEFS = [
       { id:'seg',     tipo:'seg_col',         label:'Segmentar por (opcional)' },
       { id:'nmin',    tipo:'nmin',            label:'N mínimo por segmento (confidencialidad)' },
       { id:'hidelow', tipo:'hidelow',         label:'Segmentos bajo el N mínimo' },
+      { id:'sort',    tipo:'sort_enps',       label:'Ordenar filas por' },
+      { id:'altura',  tipo:'altura_px',       label:'Alto del gráfico' },
       { id:'bench',   tipo:'benchmark_enps',  label:'Líneas de referencia (%)' }
     ]
   },
@@ -5052,6 +5054,22 @@ function renderRcpParams() {
           '+ Agregar línea de referencia' +
         '</button>' +
       '</div>';
+    } else if(p.tipo==='sort_enps') {
+      html += `<select id="rcp_${p.id}" style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
+        <option value="default">Predeterminado (orden original)</option>
+        <option value="n_desc">N (mayor a menor)</option>
+        <option value="n_asc">N (menor a mayor)</option>
+        <option value="promo_desc">% Promotores (mayor a menor)</option>
+        <option value="detr_desc">% Detractores (mayor a menor)</option>
+        <option value="neutr_desc">% Neutros (mayor a menor)</option>
+      </select>`;
+    } else if(p.tipo==='altura_px') {
+      html += `<div style="display:flex;align-items:center;gap:10px">
+        <input type="number" id="rcp_${p.id}" value="0" min="0" max="1200" step="20"
+          style="width:90px;padding:6px 8px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)"
+          placeholder="Auto">
+        <span style="font-size:12px;color:var(--text2)">px — 0 = automático según filas</span>
+      </div>`;
     } else if(p.tipo==='benchmark_enps') {
       html += '<div style="display:flex;flex-direction:column;gap:8px">' +
         '<div style="font-size:11px;color:var(--text2)">Líneas verticales de referencia en el gráfico (0–100 %).</div>' +
@@ -5279,6 +5297,74 @@ function rcpGetEnpsBenchLines(tagIdx, enpsCatFn) {
     if(value !== null) lines.push({value, color, label, dashed});
   }
   return lines;
+}
+
+function rcpEnpsRestoreAll() {
+  if(!RCP._enpsState) return;
+  RCP._enpsState.hiddenLabels.clear();
+  rcpEnpsRefresh();
+}
+
+function rcpEnpsSort(groups, sort) {
+  if(!sort || sort === 'default') return groups;
+  const g2 = [...groups];
+  if(sort === 'n_desc')     g2.sort((a,b) => b.n - a.n);
+  else if(sort === 'n_asc') g2.sort((a,b) => a.n - b.n);
+  else if(sort === 'promo_desc') g2.sort((a,b) => b.e.p - a.e.p);
+  else if(sort === 'detr_desc')  g2.sort((a,b) => b.e.d - a.e.d);
+  else if(sort === 'neutr_desc') g2.sort((a,b) => b.e.n - a.e.n);
+  return g2;
+}
+
+function rcpEnpsRefresh() {
+  const state = RCP._enpsState;
+  if(!state || !RCP.chart) return;
+
+  let visible = state.allGroups.filter(g => !state.hiddenLabels.has(g.baseLabel));
+  if(state.nmin > 0 && state.hideLow) visible = visible.filter(g => g.n >= state.nmin);
+  visible = rcpEnpsSort(visible, state.sort);
+
+  const labels    = visible.map(g => g.baseLabel + ' (N='+g.n+')');
+  const promoD=[], neutroD=[], detrD=[];
+  visible.forEach(g => {
+    if(state.nmin > 0 && g.n < state.nmin) { promoD.push(null); neutroD.push(null); detrD.push(null); }
+    else { promoD.push(g.e.p); neutroD.push(g.e.n); detrD.push(g.e.d); }
+  });
+  state.nPerGroup    = visible.map(g => g.n);
+  state.currentLabels = visible.map(g => g.baseLabel);
+
+  RCP.chart.data.labels = labels;
+  // datasets: 0=Detractores, 1=Neutros, 2=Promotores, 3+=benchmark lines
+  const baseDs = RCP.chart.data.datasets;
+  if(baseDs[0]) baseDs[0].data = detrD;
+  if(baseDs[1]) baseDs[1].data = neutroD;
+  if(baseDs[2]) baseDs[2].data = promoD;
+  for(let di=3; di<baseDs.length; di++) {
+    const firstVal = baseDs[di].data[0];
+    baseDs[di].data = labels.map(() => firstVal);
+  }
+
+  if(!state.alturaOverride) {
+    const rowH = 44;
+    const h = Math.max(240, visible.length * rowH + 80);
+    const canvasEl = document.getElementById('rcp-canvas');
+    const inner    = document.getElementById('rcp-canvas-inner');
+    if(inner)  { inner.style.height = h+'px'; }
+    if(canvasEl) { canvasEl.style.height = h+'px'; canvasEl.style.minHeight = h+'px'; }
+    const hSlider = document.getElementById('rcp-height-slider');
+    const hLabel  = document.getElementById('rcp-height-label');
+    if(hSlider) hSlider.value = h;
+    if(hLabel)  hLabel.textContent = h+'px';
+  }
+
+  const toolsEl   = document.getElementById('rcp-enps-tools');
+  const countEl   = document.getElementById('rcp-enps-hidden-count');
+  if(toolsEl) toolsEl.style.display = state.hiddenLabels.size > 0 ? 'flex' : 'none';
+  if(countEl) countEl.textContent = state.hiddenLabels.size > 0
+    ? state.hiddenLabels.size + ' segmento(s) oculto(s) — haz clic en las barras para ocultar/mostrar'
+    : '';
+
+  RCP.chart.update();
 }
 
 function rcpSegRdChanged() {
@@ -5944,6 +6030,8 @@ function rcpGenerate() {
     const nmin = parseInt(rcpGetParam('nmin')) || 0;
     const hideEl  = document.querySelector('input[name="rcp_hidelow"]:checked');
     const hideLow = hideEl ? hideEl.value === 'hide' : false;
+    const sortVal = rcpGetParam('sort') || 'default';
+    const alturaParam = parseInt(rcpGetParam('altura')) || 0;
 
     let tagIdx = RCP.headers.findIndex(h=>/enps_cat|enps_tag|enps\.tag/i.test(h));
     if(tagIdx<0) tagIdx = rcpColIdxFuzzy('eNPS_tag');
@@ -5968,72 +6056,154 @@ function rcpGenerate() {
     }
 
     // Build groups
-    let groups = [];
+    let rawGroups = [];
     if(seg && seg !== '__org__') {
       const segIdx = RCP.headers.indexOf(seg);
       const allMedRows = meds.flatMap(m=>rcpRowsByMed(m));
       const grps = [...new Set(allMedRows.map(r=>String(r[segIdx]||'').trim()).filter(Boolean))].sort();
-      grps.forEach(g=>{ groups.push({label:g, rows:allMedRows.filter(r=>String(r[segIdx]||'').trim()===g)}); });
+      grps.forEach(g=>{ rawGroups.push({baseLabel:g, rows:allMedRows.filter(r=>String(r[segIdx]||'').trim()===g)}); });
     } else if(seg === '__org__') {
-      groups.push({label:'Organización', rows:meds.flatMap(m=>rcpRowsByMed(m))});
+      rawGroups.push({baseLabel:'Organización', rows:meds.flatMap(m=>rcpRowsByMed(m))});
     } else {
-      meds.forEach(m=>{ groups.push({label:m, rows:rcpRowsByMed(m)}); });
+      meds.forEach(m=>{ rawGroups.push({baseLabel:m, rows:rcpRowsByMed(m)}); });
     }
 
-    // Apply nmin / hidelow
-    if(hideLow && nmin>0) groups = groups.filter(g=>g.rows.length>=nmin);
+    // Enrich groups with n + enps values
+    rawGroups = rawGroups.map(g => ({...g, n:g.rows.length, e:enpsCalc(g.rows)}));
+
+    // Apply nmin/hidelow + sort (initial render)
+    let groups = rawGroups;
+    if(hideLow && nmin>0) groups = groups.filter(g=>g.n>=nmin);
+    groups = rcpEnpsSort(groups, sortVal);
     if(!groups.length){ alert('No hay datos para generar el gráfico.'); return; }
 
-    const labels    = groups.map(g=>g.label);
-    const nPerGroup = groups.map(g=>g.rows.length);
+    // Store state for click-to-hide and refresh
+    RCP._enpsState = {
+      allGroups: rawGroups,
+      hiddenLabels: new Set(),
+      nPerGroup: groups.map(g=>g.n),
+      currentLabels: groups.map(g=>g.baseLabel),
+      nmin, hideLow, sort: sortVal,
+      alturaOverride: alturaParam > 0 ? alturaParam : 0,
+      tagIdx, enpsCategory
+    };
+
+    const labels    = groups.map(g => g.baseLabel + ' (N='+g.n+')');
     const promoD=[], neutroD=[], detrD=[];
     groups.forEach(g=>{
-      if(nmin>0 && g.rows.length<nmin){ promoD.push(null); neutroD.push(null); detrD.push(null); return; }
-      const e=enpsCalc(g.rows); promoD.push(e.p); neutroD.push(e.n); detrD.push(e.d);
+      if(nmin>0 && g.n<nmin){ promoD.push(null); neutroD.push(null); detrD.push(null); }
+      else { promoD.push(g.e.p); neutroD.push(g.e.n); detrD.push(g.e.d); }
     });
 
     // Benchmark vertical lines
-    const enpsBench  = rcpGetEnpsBenchLines(tagIdx, enpsCategory);
-    const benchDs    = enpsBench.map(b=>({
+    const enpsBench = rcpGetEnpsBenchLines(tagIdx, enpsCategory);
+    const benchDs   = enpsBench.map(b=>({
       type:'line', label:b.label, data:labels.map(()=>b.value),
       borderColor:b.color, borderWidth:2,
       borderDash:b.dashed?[6,4]:[], pointRadius:0, fill:false, order:0,
     }));
 
-    // Canvas sizing — horizontal bars, height per row
+    // Canvas sizing
+    const rowH = 44;
+    const hAuto = Math.max(240, groups.length * rowH + 80);
+    const h = alturaParam > 0 ? alturaParam : hAuto;
     const canvasEl = document.getElementById('rcp-canvas');
     const canvasInner = document.getElementById('rcp-canvas-inner');
-    const rowH = Math.max(42, Math.min(72, 600/Math.max(labels.length,1)));
-    const h = Math.max(300, labels.length*rowH + 80);
     if(canvasInner){ canvasInner.style.width='100%'; canvasInner.style.height=h+'px'; }
     if(canvasEl){ canvasEl.style.height=h+'px'; canvasEl.style.minHeight=h+'px'; }
+    const hSlider = document.getElementById('rcp-height-slider');
+    const hLbl    = document.getElementById('rcp-height-label');
+    if(hSlider) hSlider.value = h;
+    if(hLbl)    hLbl.textContent = h+'px';
+
+    // Hide eNPS restore tools initially
+    const toolsEl = document.getElementById('rcp-enps-tools');
+    if(toolsEl) toolsEl.style.display = 'none';
+
+    // Adaptive y-axis font size
+    const tickFontSize = groups.length > 20 ? 9 : groups.length > 12 ? 10 : 11;
+
+    // Plugin: % value labels inside each bar
+    const enpsValueLabels = {
+      id: 'enpsValueLabels',
+      afterDatasetsDraw(chart) {
+        const ctx = chart.ctx;
+        chart.data.datasets.forEach((ds, di) => {
+          if(ds.type === 'line') return;
+          const meta = chart.getDatasetMeta(di);
+          if(meta.hidden) return;
+          meta.data.forEach((bar, i) => {
+            const v = ds.data[i];
+            if(v === null || v === undefined) return;
+            const barW = Math.abs(bar.x - bar.base);
+            if(barW < 24) return;
+            const txt = v < 10 ? (+v).toFixed(1)+'%' : Math.round(+v)+'%';
+            ctx.save();
+            ctx.font = '600 10px "DM Sans",sans-serif';
+            ctx.fillStyle = '#1a1a1a';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(txt, (bar.base + bar.x) / 2, bar.y);
+            ctx.restore();
+          });
+        });
+      }
+    };
 
     const ds=[
-      {label:'Detractores', data:detrD,  backgroundColor:RCP_COLORS.detractor.bg,  borderColor:RCP_COLORS.detractor.border, borderWidth:1},
-      {label:'Neutros',     data:neutroD, backgroundColor:RCP_COLORS.neutro.bg,    borderColor:RCP_COLORS.neutro.border,    borderWidth:1},
-      {label:'Promotores',  data:promoD,  backgroundColor:RCP_COLORS.promotor.bg,  borderColor:RCP_COLORS.promotor.border,  borderWidth:1},
+      {label:'Detractores', data:detrD,  backgroundColor:RCP_COLORS.detractor.bg,  borderColor:RCP_COLORS.detractor.border, borderWidth:0},
+      {label:'Neutros',     data:neutroD, backgroundColor:RCP_COLORS.neutro.bg,    borderColor:RCP_COLORS.neutro.border,    borderWidth:0},
+      {label:'Promotores',  data:promoD,  backgroundColor:RCP_COLORS.promotor.bg,  borderColor:RCP_COLORS.promotor.border,  borderWidth:0},
       ...benchDs
     ];
+
     const baseOpts = rcpBaseOptions(def.nombre, true);
     chartCfg = { type:'bar', data:{labels, datasets:ds}, options:{
       ...baseOpts,
-      indexAxis:'y',
+      indexAxis: 'y',
+      onClick: (event, elements) => {
+        if(!elements || !elements.length) return;
+        const state = RCP._enpsState;
+        if(!state) return;
+        const idx = elements[0].index;
+        const baseLabel = state.currentLabels?.[idx];
+        if(!baseLabel) return;
+        if(state.hiddenLabels.has(baseLabel)) state.hiddenLabels.delete(baseLabel);
+        else state.hiddenLabels.add(baseLabel);
+        rcpEnpsRefresh();
+      },
       plugins:{
         ...baseOpts.plugins,
-        legend:{ display: benchDs.length>0 || true, position:'bottom', labels:{font:{size:11},padding:14,
-          filter: item=>!['Detractores','Neutros','Promotores'].includes(item.text) || benchDs.length===0 ? true : benchDs.length>0 } },
+        legend:{ display:true, position:'bottom', labels:{font:{size:11}, padding:14} },
         tooltip:{ callbacks:{ label: ctx=>{
-          const n=nPerGroup[ctx.dataIndex];
-          const v=ctx.raw;
+          const state = RCP._enpsState;
+          const n = state ? state.nPerGroup[ctx.dataIndex] : '';
+          const v = ctx.raw;
           if(ctx.dataset.type==='line') return ctx.dataset.label+': '+v+'%';
           return v!==null ? ctx.dataset.label+': '+v+'% (N='+n+')' : 'N='+n+' (bajo mínimo)';
         }}}
       },
       scales:{
-        x:{stacked:true, max:100, ticks:{callback:v=>v+'%'}, grid:{color:'rgba(0,0,0,0.04)'}},
-        y:{stacked:true, ticks:{font:{size:11}}}
+        x:{ stacked:true, max:100, grid:{display:false}, border:{display:false},
+            ticks:{callback:v=>v+'%', font:{size:10}} },
+        y:{ stacked:true, grid:{display:false}, border:{display:false},
+            ticks:{
+              font:{size:tickFontSize},
+              callback: function(val) {
+                const lbl = this.getLabelForValue(val) || '';
+                if(lbl.length <= 26) return lbl;
+                const words = lbl.split(' ');
+                const lines = []; let cur = '';
+                words.forEach(w => {
+                  if(cur && (cur+' '+w).length > 22) { lines.push(cur); cur=w; }
+                  else cur = cur ? cur+' '+w : w;
+                });
+                if(cur) lines.push(cur);
+                return lines;
+              }
+            }}
       }
-    }};
+    }, plugins:[enpsValueLabels] };
 
   } else if(def.id==='ranking_criticidad') {
     const med=rcpGetParam('med'), cla=rcpGetParam('cla');
