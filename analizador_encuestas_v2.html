@@ -1127,10 +1127,7 @@ tr:hover td { background: var(--bg); }
                   <button class="btn btn-secondary btn-sm" onclick="rcpDownloadPNG()">⬇ PNG</button>
                 </div>
               </div>
-              <div id="rcp-enps-tools" style="display:none;margin-bottom:.5rem;display:none;align-items:center;gap:10px">
-                <button onclick="rcpEnpsRestoreAll()" style="font-size:12px;padding:4px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);cursor:pointer;color:var(--accent)">↩ Restaurar segmentos ocultos</button>
-                <span id="rcp-enps-hidden-count" style="font-size:11px;color:var(--text2)"></span>
-              </div>
+              <div id="rcp-enps-tools" style="display:none;margin-bottom:.75rem"></div>
               <div id="rcp-canvas-wrap" style="overflow-x:auto;width:100%">
                 <div id="rcp-canvas-inner" style="position:relative;min-height:460px">
                   <canvas id="rcp-canvas" style="min-height:460px"></canvas>
@@ -5057,11 +5054,14 @@ function renderRcpParams() {
     } else if(p.tipo==='sort_enps') {
       html += `<select id="rcp_${p.id}" style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
         <option value="default">Predeterminado (orden original)</option>
-        <option value="n_desc">N (mayor a menor)</option>
-        <option value="n_asc">N (menor a mayor)</option>
-        <option value="promo_desc">% Promotores (mayor a menor)</option>
-        <option value="detr_desc">% Detractores (mayor a menor)</option>
-        <option value="neutr_desc">% Neutros (mayor a menor)</option>
+        <option value="n_desc">N — mayor a menor</option>
+        <option value="n_asc">N — menor a mayor</option>
+        <option value="promo_desc">% Promotores — mayor a menor</option>
+        <option value="promo_asc">% Promotores — menor a mayor</option>
+        <option value="detr_desc">% Detractores — mayor a menor</option>
+        <option value="detr_asc">% Detractores — menor a mayor</option>
+        <option value="neutr_desc">% Neutros — mayor a menor</option>
+        <option value="neutr_asc">% Neutros — menor a mayor</option>
       </select>`;
     } else if(p.tipo==='altura_px') {
       html += `<div style="display:flex;align-items:center;gap:10px">
@@ -5305,14 +5305,23 @@ function rcpEnpsRestoreAll() {
   rcpEnpsRefresh();
 }
 
+function rcpEnpsRestoreOne(lbl) {
+  if(!RCP._enpsState) return;
+  RCP._enpsState.hiddenLabels.delete(lbl);
+  rcpEnpsRefresh();
+}
+
 function rcpEnpsSort(groups, sort) {
   if(!sort || sort === 'default') return groups;
   const g2 = [...groups];
-  if(sort === 'n_desc')     g2.sort((a,b) => b.n - a.n);
-  else if(sort === 'n_asc') g2.sort((a,b) => a.n - b.n);
+  if     (sort === 'n_desc')     g2.sort((a,b) => b.n   - a.n);
+  else if(sort === 'n_asc')      g2.sort((a,b) => a.n   - b.n);
   else if(sort === 'promo_desc') g2.sort((a,b) => b.e.p - a.e.p);
+  else if(sort === 'promo_asc')  g2.sort((a,b) => a.e.p - b.e.p);
   else if(sort === 'detr_desc')  g2.sort((a,b) => b.e.d - a.e.d);
+  else if(sort === 'detr_asc')   g2.sort((a,b) => a.e.d - b.e.d);
   else if(sort === 'neutr_desc') g2.sort((a,b) => b.e.n - a.e.n);
+  else if(sort === 'neutr_asc')  g2.sort((a,b) => a.e.n - b.e.n);
   return g2;
 }
 
@@ -5357,12 +5366,29 @@ function rcpEnpsRefresh() {
     if(hLabel)  hLabel.textContent = h+'px';
   }
 
-  const toolsEl   = document.getElementById('rcp-enps-tools');
-  const countEl   = document.getElementById('rcp-enps-hidden-count');
-  if(toolsEl) toolsEl.style.display = state.hiddenLabels.size > 0 ? 'flex' : 'none';
-  if(countEl) countEl.textContent = state.hiddenLabels.size > 0
-    ? state.hiddenLabels.size + ' segmento(s) oculto(s) — haz clic en las barras para ocultar/mostrar'
-    : '';
+  const toolsEl = document.getElementById('rcp-enps-tools');
+  if(toolsEl) {
+    if(state.hiddenLabels.size > 0) {
+      const chips = [...state.hiddenLabels].map(lbl => {
+        const safe = lbl.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        return `<span onclick="rcpEnpsRestoreOne('${safe}')"
+          style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:var(--surface);border:1px solid var(--border);border-radius:12px;font-size:11px;cursor:pointer;color:var(--text2)">
+          ${lbl} <span style="color:var(--accent);font-size:13px;line-height:1">↩</span>
+        </span>`;
+      }).join('');
+      toolsEl.innerHTML = `<div style="padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm)">
+        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">Segmentos ocultos — clic en el nombre del segmento en el gráfico para ocultar/mostrar:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+          ${chips}
+          <button onclick="rcpEnpsRestoreAll()" style="font-size:11px;padding:3px 10px;border:1px solid var(--accent);border-radius:12px;background:transparent;color:var(--accent);cursor:pointer">Restaurar todos</button>
+        </div>
+      </div>`;
+      toolsEl.style.display = 'block';
+    } else {
+      toolsEl.style.display = 'none';
+      toolsEl.innerHTML = '';
+    }
+  }
 
   RCP.chart.update();
 }
@@ -6161,12 +6187,21 @@ function rcpGenerate() {
     chartCfg = { type:'bar', data:{labels, datasets:ds}, options:{
       ...baseOpts,
       indexAxis: 'y',
-      onClick: (event, elements) => {
-        if(!elements || !elements.length) return;
+      onClick: (event, elements, chart) => {
         const state = RCP._enpsState;
         if(!state) return;
-        const idx = elements[0].index;
-        const baseLabel = state.currentLabels?.[idx];
+        const scaleY = chart.scales.y;
+        // Click must be in the y-axis label area (left of the plot)
+        if(!scaleY || event.x > scaleY.left) return;
+        // Find closest tick by y-pixel
+        let closest = -1, minDist = Infinity;
+        scaleY.ticks.forEach((tick, i) => {
+          const py = scaleY.getPixelForTick(i);
+          const d  = Math.abs(py - event.y);
+          if(d < minDist) { minDist = d; closest = i; }
+        });
+        if(closest < 0 || minDist > 28) return;
+        const baseLabel = state.currentLabels?.[closest];
         if(!baseLabel) return;
         if(state.hiddenLabels.has(baseLabel)) state.hiddenLabels.delete(baseLabel);
         else state.hiddenLabels.add(baseLabel);
