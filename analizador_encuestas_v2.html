@@ -6941,6 +6941,14 @@ function rcpBaseOptions(title, stacked, yAxis) {
 }
 function rcpBarChart(labels, datasets, title, horizontal, axisOpts) {
   const baseOpts = rcpBaseOptions(title, false);
+  if (horizontal) {
+    // Force category type on y (category axis) and remove any stray min/max
+    // that rcpBaseOptions may have set — Chart.js infers linear if those keys exist
+    baseOpts.scales.y.type = 'category';
+    delete baseOpts.scales.y.min;
+    delete baseOpts.scales.y.max;
+    delete baseOpts.scales.y.ticks.callback;
+  }
   if (axisOpts) {
     const vScale = horizontal ? 'x' : 'y';
     if (axisOpts.min !== undefined) baseOpts.scales[vScale].min = axisOpts.min;
