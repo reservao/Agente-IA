@@ -5943,9 +5943,19 @@ function rcpGenerate() {
               ctx.textAlign = 'center'; ctx.textBaseline = 'top';
               ctx.fillText('N='+n, bx, chartArea.bottom + 8);
             }
-            if(val === null || val === undefined) continue;
             // Value label inside bar
             var barBottom = yScale.getPixelForValue(plugin.isEng ? 0 : 1);
+            if(val === null || val === undefined) {
+              ctx.save();
+              ctx.font = 'italic 9px "DM Sans", sans-serif';
+              ctx.fillStyle = '#aaa';
+              ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+              ctx.translate(bx, (chartArea.top + barBottom) / 2);
+              ctx.rotate(-Math.PI / 2);
+              ctx.fillText('Confidencial (N bajo mínimo)', 0, 0);
+              ctx.restore();
+              continue;
+            }
             var barTopY   = bar.y;
             var barHeight = barBottom - barTopY;
             ctx.font = '600 '+valFontSize+'px "DM Sans", sans-serif';
