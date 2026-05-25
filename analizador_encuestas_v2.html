@@ -6727,6 +6727,8 @@ function rcpGenerate() {
   } else if(def.id==='ranking_criticidad') {
     const med=rcpGetParam('med'), cla=rcpGetParam('cla');
     const sortRC = rcpGetParam('sort') || 'default';
+    const scaleMin = parseFloat(document.getElementById('rcp_scale_min')?.value ?? '1') || 1;
+    const scaleMax = parseFloat(document.getElementById('rcp_scale_max')?.value ?? '6') || 6;
     const claIdx=RCP.headers.indexOf(cla);
     const medRows=rcpRowsByMed(med);
     const grps=[...new Set(medRows.map(r=>String(r[claIdx]||'').trim()).filter(Boolean))];
@@ -6742,16 +6744,20 @@ function rcpGenerate() {
       data = rcpSortBar(rcItems, sortRC).map(x=>x._d);
     }
     const labelsRC=data.map(d=>d.g);
-    const ds=[
-      {label:'Engagement', data:data.map(d=>d.eng), backgroundColor:RCP_COLORS.engagement.bg, borderColor:RCP_COLORS.engagement.border, borderWidth:1.5},
-      {label:'Agotamiento', data:data.map(d=>d.ago), backgroundColor:RCP_COLORS.agotamiento.bg, borderColor:RCP_COLORS.agotamiento.border, borderWidth:1.5},
-    ];
-    const scaleMin = parseFloat(document.getElementById('rcp_scale_min')?.value ?? '1') || 1;
-    const scaleMax = parseFloat(document.getElementById('rcp_scale_max')?.value ?? '6') || 6;
-    const rcBarValueLabels = {
-      id: 'rcBarValueLabels',
+    const nPerGroupRC=data.map(d=>d.n);
+    // Gradient colours (horizontal: left=lighter base, right=full colour)
+    const engC = { light:'rgba(27,63,110,0.70)', full:'rgba(27,63,110,0.98)' };
+    const agoC = { light:'rgba(168,68,43,0.70)',  full:'rgba(168,68,43,0.98)' };
+    // Plugin: value labels inside bars + N per group on the right
+    const rcRankingPlugin = {
+      id: 'rcRankingPlugin',
       afterDatasetsDraw(chart) {
         const ctx = chart.ctx;
+        const ca  = chart.chartArea;
+        const plg = chart.options.plugins.rcRankingPlugin;
+        const nArr = plg?.nPerGroup || [];
+        const nGroups = chart.data.labels.length;
+        const fs = nGroups > 15 ? 10 : 12;
         chart.data.datasets.forEach((ds, di) => {
           if (ds.type === 'line') return;
           const meta = chart.getDatasetMeta(di);
@@ -6760,26 +6766,98 @@ function rcpGenerate() {
             const v = ds.data[i];
             if (v === null || v === undefined) return;
             const barW = Math.abs(bar.x - bar.base);
-            if (barW < 32) return;
+            if (barW < 34) return;
             ctx.save();
-            ctx.font = '600 11px "DM Sans", sans-serif';
-            ctx.fillStyle = '#ffffff';
+            ctx.font = '700 '+fs+'px "DM Sans", sans-serif';
+            ctx.fillStyle = 'rgba(255,255,255,0.93)';
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
-            ctx.fillText((+v).toFixed(2), Math.max(bar.x, bar.base) - 7, bar.y);
+            ctx.fillText((+v).toFixed(2), Math.max(bar.x, bar.base) - 8, bar.y);
             ctx.restore();
           });
         });
+        // N labels right of plot area (once per group row)
+        const scaleY = chart.scales.y;
+        if (!scaleY || !nArr.length) return;
+        ctx.save();
+        ctx.font = '9px "DM Mono", monospace';
+        ctx.fillStyle = 'rgba(80,80,80,0.72)';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        scaleY.ticks.forEach((tick, i) => {
+          if (nArr[i] === undefined) return;
+          ctx.fillText('N='+nArr[i], ca.right + 6, scaleY.getPixelForTick(i));
+        });
+        ctx.restore();
       }
     };
-    chartCfg = rcpBarChart(labelsRC, ds, def.nombre+' — '+cla, true, {min:scaleMin, max:scaleMax});
-    chartCfg.plugins = [rcBarValueLabels];
+    const mkGrad = (c, chart) => {
+      if (!chart.chartArea) return c.full;
+      const ca = chart.chartArea;
+      const g = chart.ctx.createLinearGradient(ca.left, 0, ca.right, 0);
+      g.addColorStop(0, c.light); g.addColorStop(1, c.full);
+      return g;
+    };
+    const ds=[
+      { label:'Engagement', data:data.map(d=>d.eng),
+        backgroundColor: c => mkGrad(engC, c.chart),
+        borderWidth:0,
+        borderRadius:{ topLeft:0, topRight:7, bottomLeft:0, bottomRight:7 },
+        borderSkipped:false, categoryPercentage:0.85, barPercentage:0.72 },
+      { label:'Agotamiento', data:data.map(d=>d.ago),
+        backgroundColor: c => mkGrad(agoC, c.chart),
+        borderWidth:0,
+        borderRadius:{ topLeft:0, topRight:7, bottomLeft:0, bottomRight:7 },
+        borderSkipped:false, categoryPercentage:0.85, barPercentage:0.72 },
+    ];
+    // Adaptive canvas height
+    const canvasEl2 = document.getElementById('rcp-canvas');
+    const canvasInner2 = document.getElementById('rcp-canvas-inner');
+    const rowH2 = 68;
+    const h2 = Math.max(280, data.length * rowH2 + 80);
+    if(canvasInner2){ canvasInner2.style.width='100%'; canvasInner2.style.height=h2+'px'; }
+    if(canvasEl2){ canvasEl2.style.height=h2+'px'; canvasEl2.style.minHeight=h2+'px'; }
+    const tickFs = data.length > 20 ? 9 : data.length > 12 ? 10 : 11;
+    chartCfg = {
+      type:'bar',
+      data:{ labels:labelsRC, datasets:ds },
+      options:{
+        indexAxis:'y',
+        responsive:true, maintainAspectRatio:false,
+        layout:{ padding:{ top:16, bottom:16, left:0, right:44 } },
+        plugins:{
+          title:{ display:true, text:def.nombre+' — '+cla, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
+          legend:{ display:true, position:'bottom', labels:{font:{size:11}, padding:14} },
+          tooltip:{ callbacks:{ label: ctx => {
+            const n = nPerGroupRC[ctx.dataIndex];
+            return ctx.dataset.label+': '+(+ctx.raw).toFixed(2)+' (N='+n+')';
+          }}},
+          rcRankingPlugin:{ nPerGroup: nPerGroupRC }
+        },
+        scales:{
+          x:{ min:scaleMin, max:scaleMax, grid:{display:false}, border:{display:false},
+              ticks:{font:{size:10}, stepSize:0.5} },
+          y:{ type:'category', grid:{display:false}, border:{display:false},
+              ticks:{ font:{size:tickFs},
+                callback: function(val) {
+                  const lbl = this.getLabelForValue(val) || '';
+                  if(lbl.length <= 24) return lbl;
+                  const words=lbl.split(' '); const lines=[]; let cur='';
+                  words.forEach(w=>{ if(cur&&(cur+' '+w).length>20){lines.push(cur);cur=w;}else cur=cur?cur+' '+w:w; });
+                  if(cur) lines.push(cur); return lines;
+                }
+              }}
+        },
+        animation:{ duration:400, onComplete(){ this.draw(); } }
+      },
+      plugins:[rcRankingPlugin]
+    };
     RCP._chartState = {
-      horizontal: true,
-      allLabels: labelsRC,
-      allData: [data.map(d=>d.eng), data.map(d=>d.ago)],
-      benchVals: [], numMain: 2, allN: data.map(d=>d.n),
-      hiddenLabels: new Set(), currentLabels: labelsRC.slice(),
+      horizontal:true, allLabels:labelsRC,
+      allData:[data.map(d=>d.eng), data.map(d=>d.ago)],
+      benchVals:[], numMain:2, allN:nPerGroupRC,
+      pluginKey:'rcRankingPlugin',
+      hiddenLabels:new Set(), currentLabels:labelsRC.slice(),
     };
     chartCfg.options.onClick = (event, elements, chart) => {
       const state = RCP._chartState; if (!state) return;
