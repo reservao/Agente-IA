@@ -5646,10 +5646,12 @@ function rcpChartRefresh() {
   const vis = allL.map((_,i)=>i).filter(i=>!state.hiddenLabels.has(allL[i]));
   state.currentLabels = vis.map(i=>allL[i]);
   RCP.chart.data.labels = state.currentLabels;
-  // Update main datasets
+  // Update main datasets (data + per-bar colors if present)
   for (let di=0; di<state.numMain; di++) {
     if (RCP.chart.data.datasets[di] && state.allData[di]) {
       RCP.chart.data.datasets[di].data = vis.map(i=>state.allData[di][i]);
+      if (state.allBgColors?.[di])     RCP.chart.data.datasets[di].backgroundColor = vis.map(i=>state.allBgColors[di][i]);
+      if (state.allBorderColors?.[di]) RCP.chart.data.datasets[di].borderColor     = vis.map(i=>state.allBorderColors[di][i]);
     }
   }
   // Resize benchmark datasets (constant value lines)
@@ -6464,10 +6466,15 @@ function rcpGenerate() {
     };
     // State for click-to-hide (vertical bar, click x-axis labels)
     const rdMainData = datasets.filter(d=>d.type!=='line').map(d=>d.data);
+    // Per-bar color arrays — must be filtered together with data on hide/show
+    const rdBgColors    = datasets.filter(d=>d.type!=='line').map(d => Array.isArray(d.backgroundColor) ? d.backgroundColor.slice() : null);
+    const rdBorderColors= datasets.filter(d=>d.type!=='line').map(d => Array.isArray(d.borderColor)     ? d.borderColor.slice()     : null);
     RCP._chartState = {
       horizontal: false,
       allLabels: labels,
       allData: rdMainData,
+      allBgColors: rdBgColors,
+      allBorderColors: rdBorderColors,
       benchVals: [], numMain: rdMainData.length, allN: null,
       hiddenLabels: new Set(), currentLabels: labels.slice(),
     };
