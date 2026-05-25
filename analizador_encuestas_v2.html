@@ -1206,8 +1206,18 @@ tr:hover td { background: var(--bg); }
             <option value="">— Sin segmentación (total general) —</option>
           </select>
 
-          <!-- 5. Título -->
-          <div class="slbl">5. Título del gráfico</div>
+          <!-- 5. Ordenar -->
+          <div class="slbl">5. Ordenar por</div>
+          <select id="rc-sort" style="font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);width:100%;background:var(--surface);color:var(--text);margin-bottom:1.25rem">
+            <option value="default">Predeterminado (orden original)</option>
+            <option value="val_desc">Valor — mayor a menor</option>
+            <option value="val_asc">Valor — menor a mayor</option>
+            <option value="alpha_asc">Alfabético A→Z</option>
+            <option value="alpha_desc">Alfabético Z→A</option>
+          </select>
+
+          <!-- 6. Título -->
+          <div class="slbl">6. Título del gráfico</div>
           <input type="text" id="rc-title" placeholder="Ej: Engagement histórico por área"
                  style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);margin-bottom:1rem">
 
@@ -1230,6 +1240,7 @@ tr:hover td { background: var(--bg); }
                 <button class="btn btn-secondary btn-sm" onclick="rcDownloadPNG()">⬇ Descargar PNG</button>
               </div>
             </div>
+            <div id="rc-chart-tools" style="display:none;margin-bottom:.75rem"></div>
             <div style="position:relative;width:100%;min-height:420px">
               <canvas id="rc-canvas"></canvas>
             </div>
@@ -4493,6 +4504,7 @@ function rcGenerate() {
   const isOrgSeg = segColRaw === '__org__';
   const title  = document.getElementById('rc-title').value || '';
   const type   = RC.chartType;
+  const rcSort = (document.getElementById('rc-sort')?.value) || 'default';
 
   let labels = [], datasets = [];
 
@@ -4578,10 +4590,28 @@ function rcGenerate() {
     });
   }
 
+  // Apply sort to labels (not histogram/scatter)
+  if (rcSort !== 'default' && !isScatter && type !== 'histogram' && labels.length > 0) {
+    const firstDs = datasets[0];
+    const sortItems = labels.map((l,i)=>({label:l, val:parseFloat(firstDs?.data[i])||0, n:1}));
+    const sorted = (function rcSortGeneric(items, sort) {
+      const s=[...items];
+      if(sort==='val_desc') s.sort((a,b)=>b.val-a.val);
+      else if(sort==='val_asc') s.sort((a,b)=>a.val-b.val);
+      else if(sort==='alpha_asc') s.sort((a,b)=>a.label.localeCompare(b.label));
+      else if(sort==='alpha_desc') s.sort((a,b)=>b.label.localeCompare(a.label));
+      return s;
+    })(sortItems, rcSort);
+    const sortedIdx = sorted.map(x=>labels.indexOf(x.label));
+    labels.length = 0; sorted.forEach(x=>labels.push(x.label));
+    datasets.forEach(ds=>{ if(Array.isArray(ds.data)){ const old=[...ds.data]; ds.data=sortedIdx.map(i=>old[i]); }});
+  }
+
   // Render chart
   const rcCanvas = document.getElementById('rc-canvas');
   if (!rcCanvas) { console.error('rc-canvas not found'); return; }
   if (RC.chart) { RC.chart.destroy(); RC.chart = null; }
+  RC._chartState = null;
 
   // Auto-resize canvas when many bars to avoid label overlap (match RCP behavior)
   {
@@ -4598,6 +4628,17 @@ function rcGenerate() {
   const isLine = type === 'line';
   const isScatter = type === 'scatter';
 
+  // Store state for click-to-hide (bar/column/line charts only)
+  if (!isScatter && type !== 'histogram') {
+    RC._chartState = {
+      horizontal: isHorizontal,
+      allLabels: [...labels],
+      allData: datasets.map(ds => [...(ds.data||[])]),
+      numMain: datasets.length, benchVals: [],
+      hiddenLabels: new Set(), currentLabels: [...labels],
+    };
+  }
+
   const chartCfg = {
     type: isScatter ? 'scatter' : isLine ? 'line' : 'bar',
     data: { labels, datasets },
@@ -4605,6 +4646,27 @@ function rcGenerate() {
       indexAxis: isHorizontal ? 'y' : 'x',
       responsive: true,
       maintainAspectRatio: false,
+      onClick: (isScatter || type==='histogram') ? undefined : (event, elements, chart) => {
+        const state = RC._chartState; if (!state) return;
+        if (state.horizontal) {
+          const scaleY = chart.scales.y; if (!scaleY || event.x > scaleY.left) return;
+          let closest=-1, minDist=Infinity;
+          scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-event.y);if(d<minDist){minDist=d;closest=i;}});
+          if(closest<0||minDist>28) return;
+          const lbl=state.currentLabels?.[closest]; if(!lbl) return;
+          if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
+        } else {
+          const scaleX = chart.scales.x; if (!scaleX) return;
+          const bottom = chart.chartArea?.bottom;
+          if (bottom !== undefined && event.y < bottom) return;
+          let closest=-1, minDist=Infinity;
+          scaleX.ticks.forEach((tick,i)=>{const px=scaleX.getPixelForTick(i),d=Math.abs(px-event.x);if(d<minDist){minDist=d;closest=i;}});
+          if(closest<0||minDist>40) return;
+          const lbl=state.currentLabels?.[closest]; if(!lbl) return;
+          if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
+        }
+        rcChartRefresh();
+      },
       plugins: {
         title: { display: !!title, text: title, font:{size:14, weight:'bold'}, color:'#1A1916', padding:{bottom:16} },
         legend: { position:'bottom', labels:{font:{size:11}, padding:16} },
@@ -4633,6 +4695,46 @@ function rcGenerate() {
     }
   };
 
+  // Clear tools div
+  const rcTools = document.getElementById('rc-chart-tools');
+  if (rcTools) { rcTools.style.display='none'; rcTools.innerHTML=''; }
+
+  // Store state for click-to-hide (bar/column charts only)
+  const rcToolsEl = document.getElementById('rc-chart-tools');
+  if (rcToolsEl) { rcToolsEl.style.display='none'; rcToolsEl.innerHTML=''; }
+  if (!isScatter && !isLine && type !== 'histogram') {
+    RC._chartState = {
+      horizontal: isHorizontal,
+      allLabels: labels.slice(),
+      allData: datasets.map(d=>(d.data||[]).slice()),
+      benchVals: [], numMain: datasets.length,
+      hiddenLabels: new Set(), currentLabels: labels.slice(),
+    };
+    chartCfg.options.onClick = (event, elements, chart) => {
+      const state = RC._chartState; if (!state) return;
+      if (state.horizontal) {
+        const scaleY = chart.scales.y; if (!scaleY || event.x > scaleY.left) return;
+        let closest=-1, minDist=Infinity;
+        scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-event.y);if(d<minDist){minDist=d;closest=i;}});
+        if(closest<0||minDist>28) return;
+        const lbl=state.currentLabels?.[closest]; if(!lbl) return;
+        if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
+      } else {
+        const scaleX = chart.scales.x; if (!scaleX) return;
+        const bottom = chart.chartArea?.bottom;
+        if (bottom !== undefined && event.y < bottom) return;
+        let closest=-1, minDist=Infinity;
+        scaleX.ticks.forEach((tick,i)=>{const px=scaleX.getPixelForTick(i),d=Math.abs(px-event.x);if(d<minDist){minDist=d;closest=i;}});
+        if(closest<0||minDist>40) return;
+        const lbl=state.currentLabels?.[closest]; if(!lbl) return;
+        if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
+      }
+      rcChartRefresh();
+    };
+  } else {
+    RC._chartState = null;
+  }
+
   RC.chart = new Chart(ctx, chartCfg);
   document.getElementById('rc-preview-title').textContent = title || 'Gráfico generado';
   document.getElementById('rc-preview-wrap').style.display = 'block';
@@ -4647,6 +4749,47 @@ function rcGenerate() {
   });
 }
 
+function rcChartRestoreAll() {
+  if (!RC._chartState) return;
+  RC._chartState.hiddenLabels.clear();
+  rcChartRefresh();
+}
+
+function rcChartRestoreOne(lbl) {
+  if (!RC._chartState) return;
+  RC._chartState.hiddenLabels.delete(lbl);
+  rcChartRefresh();
+}
+
+function rcChartRefresh() {
+  const state = RC._chartState;
+  if (!state || !RC.chart) return;
+  const allL = state.allLabels;
+  const vis = allL.map((_,i)=>i).filter(i=>!state.hiddenLabels.has(allL[i]));
+  state.currentLabels = vis.map(i=>allL[i]);
+  RC.chart.data.labels = state.currentLabels;
+  for (let di=0; di<state.numMain; di++) {
+    if (RC.chart.data.datasets[di] && state.allData[di]) {
+      RC.chart.data.datasets[di].data = vis.map(i=>state.allData[di][i]);
+    }
+  }
+  RC.chart.update();
+  const toolsEl = document.getElementById('rc-chart-tools');
+  if (toolsEl) {
+    if (state.hiddenLabels.size > 0) {
+      const chips = [...state.hiddenLabels].map(lbl => {
+        const safe = lbl.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `<span onclick="rcChartRestoreOne('${safe}')" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:var(--surface);border:1px solid var(--border);border-radius:12px;font-size:11px;cursor:pointer;color:var(--text2)">${lbl} <span style="color:var(--accent);font-size:13px;line-height:1">&#8617;</span></span>`;
+      }).join('');
+      toolsEl.innerHTML = `<div style="padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm)"><div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">Segmentos ocultos — clic en el nombre en el gráfico para ocultar/mostrar:</div><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${chips}<button onclick="rcChartRestoreAll()" style="font-size:11px;padding:3px 10px;border:1px solid var(--accent);border-radius:12px;background:transparent;color:var(--accent);cursor:pointer">Restaurar todos</button></div></div>`;
+      toolsEl.style.display = 'block';
+    } else {
+      toolsEl.style.display = 'none';
+      toolsEl.innerHTML = '';
+    }
+  }
+}
+
 function rcSetChartWidth(w) {
   w = parseInt(w);
   const lbl = document.getElementById('rc-width-label');
@@ -4655,6 +4798,45 @@ function rcSetChartWidth(w) {
   const wrap = document.getElementById('rc-canvas')?.parentElement;
   if (wrap) wrap.style.width = w + 'px';
   RC.chart.resize(w, RC.chart.height);
+}
+
+function rcChartRestoreAll() {
+  if (!RC._chartState) return;
+  RC._chartState.hiddenLabels.clear();
+  rcChartRefresh();
+}
+
+function rcChartRestoreOne(lbl) {
+  if (!RC._chartState) return;
+  RC._chartState.hiddenLabels.delete(lbl);
+  rcChartRefresh();
+}
+
+function rcChartRefresh() {
+  const state = RC._chartState;
+  if (!state || !RC.chart) return;
+  const allL = state.allLabels;
+  const vis = allL.map((_,i)=>i).filter(i=>!state.hiddenLabels.has(allL[i]));
+  state.currentLabels = vis.map(i=>allL[i]);
+  RC.chart.data.labels = state.currentLabels;
+  RC.chart.data.datasets.forEach((ds,di)=>{
+    if(state.allData[di]) ds.data = vis.map(i=>state.allData[di][i]);
+  });
+  RC.chart.update();
+  const toolsEl = document.getElementById('rc-chart-tools');
+  if (toolsEl) {
+    if (state.hiddenLabels.size > 0) {
+      const chips = [...state.hiddenLabels].map(lbl => {
+        const safe = lbl.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        return `<span onclick="rcChartRestoreOne('${safe}')" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:var(--surface);border:1px solid var(--border);border-radius:12px;font-size:11px;cursor:pointer;color:var(--text2)">${lbl} <span style="color:var(--accent);font-size:13px;line-height:1">&#8617;</span></span>`;
+      }).join('');
+      toolsEl.innerHTML = `<div style="padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm)"><div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">Segmentos ocultos — clic en el nombre en el gráfico para ocultar/mostrar:</div><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${chips}<button onclick="rcChartRestoreAll()" style="font-size:11px;padding:3px 10px;border:1px solid var(--accent);border-radius:12px;background:transparent;color:var(--accent);cursor:pointer">Restaurar todos</button></div></div>`;
+      toolsEl.style.display = 'block';
+    } else {
+      toolsEl.style.display = 'none';
+      toolsEl.innerHTML = '';
+    }
+  }
 }
 
 function rcDownloadPNG() {
@@ -4707,6 +4889,7 @@ const RCP_DEFS = [
       { id:'seg',    tipo:'seg_col',    label:'Segmentar por (opcional)' },
       { id:'nmin',   tipo:'nmin',       label:'N mínimo por segmento (confidencialidad)' },
       { id:'hidelow',tipo:'hidelow',    label:'Segmentos bajo el N mínimo' },
+      { id:'sort',   tipo:'sort_bar',   label:'Ordenar por' },
       { id:'bench',  tipo:'benchmark',  label:'Líneas de referencia / Benchmark' }
     ]
   },
@@ -4722,6 +4905,7 @@ const RCP_DEFS = [
       { id:'seg',    tipo:'seg_col',    label:'Segmentar por (opcional)' },
       { id:'nmin',   tipo:'nmin',       label:'N mínimo por segmento (confidencialidad)' },
       { id:'hidelow',tipo:'hidelow',    label:'Segmentos bajo el N mínimo' },
+      { id:'sort',   tipo:'sort_bar',   label:'Ordenar por' },
       { id:'bench',  tipo:'benchmark',  label:'Líneas de referencia / Benchmark' }
     ]
   },
@@ -4733,7 +4917,8 @@ const RCP_DEFS = [
     tipo: 'line',
     requiere: ['WORK_ENGAGEMENT','EXHAUSTION'],
     params: [
-      { id:'meds', tipo:'meds_multi', label:'Mediciones a incluir' }
+      { id:'meds', tipo:'meds_multi', label:'Mediciones a incluir' },
+      { id:'sort', tipo:'sort_line',  label:'Ordenar por' }
     ]
   },
   {
@@ -4777,7 +4962,8 @@ const RCP_DEFS = [
     requiere: ['WORK_ENGAGEMENT','EXHAUSTION'],
     params: [
       { id:'med',  tipo:'med_single', label:'Medición a analizar' },
-      { id:'cla',  tipo:'cla_col',    label:'Clasificación a usar' }
+      { id:'cla',  tipo:'cla_col',    label:'Clasificación a usar' },
+      { id:'sort', tipo:'sort_bar',   label:'Ordenar por' }
     ]
   },
   {
@@ -4789,7 +4975,8 @@ const RCP_DEFS = [
     requiere: ['WORK_ENGAGEMENT','EXHAUSTION'],
     params: [
       { id:'med',  tipo:'med_single', label:'Medición a analizar' },
-      { id:'cla',  tipo:'cla_col',    label:'Clasificación a usar' }
+      { id:'cla',  tipo:'cla_col',    label:'Clasificación a usar' },
+      { id:'sort', tipo:'sort_bar_pct', label:'Ordenar por' }
     ]
   },
   {
@@ -4800,7 +4987,8 @@ const RCP_DEFS = [
     tipo: 'bar_demo',
     requiere: ['WORK_ENGAGEMENT','EXHAUSTION'],
     params: [
-      { id:'med',  tipo:'med_single', label:'Medición a mostrar' }
+      { id:'med',  tipo:'med_single', label:'Medición a mostrar' },
+      { id:'sort', tipo:'sort_bar',   label:'Ordenar por' }
     ]
   },
 ];
@@ -5062,6 +5250,32 @@ function renderRcpParams() {
         <option value="detr_asc">% Detractores — menor a mayor</option>
         <option value="neutr_desc">% Neutros — mayor a menor</option>
         <option value="neutr_asc">% Neutros — menor a mayor</option>
+      </select>`;
+    } else if(p.tipo==='sort_bar') {
+      html += `<select id="rcp_${p.id}" style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
+        <option value="default">Predeterminado (orden original)</option>
+        <option value="val_desc">Valor — mayor a menor</option>
+        <option value="val_asc">Valor — menor a mayor</option>
+        <option value="n_desc">N — mayor a menor</option>
+        <option value="n_asc">N — menor a mayor</option>
+        <option value="alpha_asc">Alfabético A→Z</option>
+        <option value="alpha_desc">Alfabético Z→A</option>
+      </select>`;
+    } else if(p.tipo==='sort_bar_pct') {
+      html += `<select id="rcp_${p.id}" style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
+        <option value="default">Predeterminado (orden original)</option>
+        <option value="opt_desc">% Óptimo — mayor a menor</option>
+        <option value="opt_asc">% Óptimo — menor a mayor</option>
+        <option value="crit_desc">% Crítico — mayor a menor</option>
+        <option value="crit_asc">% Crítico — menor a mayor</option>
+        <option value="alpha_asc">Alfabético A→Z</option>
+        <option value="alpha_desc">Alfabético Z→A</option>
+      </select>`;
+    } else if(p.tipo==='sort_line') {
+      html += `<select id="rcp_${p.id}" style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
+        <option value="default">Cronológico (predeterminado)</option>
+        <option value="alpha_asc">Alfabético A→Z</option>
+        <option value="alpha_desc">Alfabético Z→A</option>
       </select>`;
     } else if(p.tipo==='altura_px') {
       html += `<div style="display:flex;align-items:center;gap:10px">
@@ -5393,6 +5607,81 @@ function rcpEnpsRefresh() {
   RCP.chart.update();
 }
 
+// ── Generic chart state helpers (non-eNPS charts) ─────────────────────────
+function rcpChartRestoreAll() {
+  if (!RCP._chartState) return;
+  RCP._chartState.hiddenLabels.clear();
+  rcpChartRefresh();
+}
+
+function rcpChartRestoreOne(lbl) {
+  if (!RCP._chartState) return;
+  RCP._chartState.hiddenLabels.delete(lbl);
+  rcpChartRefresh();
+}
+
+function rcpChartRefresh() {
+  const state = RCP._chartState;
+  if (!state || !RCP.chart) return;
+  const allL = state.allLabels;
+  const vis = allL.map((_,i)=>i).filter(i=>!state.hiddenLabels.has(allL[i]));
+  state.currentLabels = vis.map(i=>allL[i]);
+  RCP.chart.data.labels = state.currentLabels;
+  // Update main datasets
+  for (let di=0; di<state.numMain; di++) {
+    if (RCP.chart.data.datasets[di] && state.allData[di]) {
+      RCP.chart.data.datasets[di].data = vis.map(i=>state.allData[di][i]);
+    }
+  }
+  // Resize benchmark datasets (constant value lines)
+  for (let di=state.numMain; di<RCP.chart.data.datasets.length; di++) {
+    const bIdx = di - state.numMain;
+    if (state.benchVals && state.benchVals[bIdx] !== undefined) {
+      RCP.chart.data.datasets[di].data = new Array(vis.length).fill(state.benchVals[bIdx]);
+    }
+  }
+  // Update rcpFloatingDot plugin data (for eng_col/agot_col)
+  if (state.pluginKey) {
+    const p = RCP.chart.options.plugins[state.pluginKey];
+    if (p) {
+      if (state.allBinaryPct) p.binaryPct = vis.map(i=>state.allBinaryPct[i]);
+      if (state.allN) p.nPerGroup = vis.map(i=>state.allN[i]);
+    }
+  }
+  RCP.chart.update();
+  // Update hidden chips
+  const toolsEl = document.getElementById('rcp-enps-tools');
+  if (toolsEl) {
+    if (state.hiddenLabels.size > 0) {
+      const chips = [...state.hiddenLabels].map(lbl => {
+        const safe = lbl.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        return `<span onclick="rcpChartRestoreOne('${safe}')" style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:var(--surface);border:1px solid var(--border);border-radius:12px;font-size:11px;cursor:pointer;color:var(--text2)">${lbl} <span style="color:var(--accent);font-size:13px;line-height:1">&#8617;</span></span>`;
+      }).join('');
+      toolsEl.innerHTML = `<div style="padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm)"><div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">Segmentos ocultos — clic en el nombre en el gráfico para ocultar/mostrar:</div><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${chips}<button onclick="rcpChartRestoreAll()" style="font-size:11px;padding:3px 10px;border:1px solid var(--accent);border-radius:12px;background:transparent;color:var(--accent);cursor:pointer">Restaurar todos</button></div></div>`;
+      toolsEl.style.display = 'block';
+    } else {
+      toolsEl.style.display = 'none';
+      toolsEl.innerHTML = '';
+    }
+  }
+}
+
+function rcpSortBar(items, sort) {
+  if (!sort || sort==='default') return items;
+  const s = [...items];
+  if      (sort==='val_desc')   s.sort((a,b)=>(b.val||0)-(a.val||0));
+  else if (sort==='val_asc')    s.sort((a,b)=>(a.val||0)-(b.val||0));
+  else if (sort==='n_desc')     s.sort((a,b)=>(b.n||0)-(a.n||0));
+  else if (sort==='n_asc')      s.sort((a,b)=>(a.n||0)-(b.n||0));
+  else if (sort==='alpha_asc')  s.sort((a,b)=>a.label.localeCompare(b.label));
+  else if (sort==='alpha_desc') s.sort((a,b)=>b.label.localeCompare(a.label));
+  else if (sort==='opt_desc')   s.sort((a,b)=>(b.opt||0)-(a.opt||0));
+  else if (sort==='opt_asc')    s.sort((a,b)=>(a.opt||0)-(b.opt||0));
+  else if (sort==='crit_desc')  s.sort((a,b)=>(b.crit||0)-(a.crit||0));
+  else if (sort==='crit_asc')   s.sort((a,b)=>(a.crit||0)-(b.crit||0));
+  return s;
+}
+
 function rcpSegRdChanged() {
   const segEl  = document.getElementById('rcp_seg');
   const wrapEl = document.getElementById('rcp_seg_val_wrap');
@@ -5474,6 +5763,7 @@ function rcpGenerate() {
   if(!def) return;
 
   if(RCP.chart){RCP.chart.destroy();RCP.chart=null;}
+  RCP._chartState = null;
   const rcpCanvas = document.getElementById('rcp-canvas');
   if (!rcpCanvas) { console.error('rcp-canvas not found'); return; }
   const ctx = rcpCanvas.getContext('2d');
@@ -5557,6 +5847,21 @@ function rcpGenerate() {
     }
 
     if(!chartRowGroups.length){ alert('No hay datos para generar el gráfico.'); return; }
+
+    // Sort by user preference
+    const sortVal = rcpGetParam('sort') || 'default';
+    if (sortVal !== 'default') {
+      const pairs = chartLabels.map((l,i)=>({l, g:chartRowGroups[i]}));
+      const tempN = pairs.map(p=>p.g.length);
+      const tempVal = pairs.map((p,i)=>{
+        if(nmin>0 && p.g.length<nmin) return null;
+        return rcpDimMean(p.g, mainCol, itemsMap[mainCol]||[]);
+      });
+      const items = pairs.map((p,i)=>({label:p.l, n:tempN[i], val:tempVal[i]||0, g:p.g}));
+      const sorted = rcpSortBar(items, sortVal);
+      chartLabels = sorted.map(x=>x.l);
+      chartRowGroups = sorted.map(x=>x.g);
+    }
 
     const nPerGroup = chartRowGroups.map(r => r.length);
 
@@ -5769,9 +6074,50 @@ function rcpGenerate() {
           ctx.restore();
         }
       }]
-    }
+    };
+    // Store state for click-to-hide and refresh
+    RCP._chartState = {
+      horizontal: false,
+      allLabels: chartLabels,
+      allData: [avgVals],
+      benchVals: benchLines.map(b=>b.value),
+      numMain: 1,
+      allN: nPerGroup,
+      allBinaryPct: binaryPct,
+      pluginKey: 'rcpFloatingDot',
+      hiddenLabels: new Set(),
+      currentLabels: chartLabels.slice(),
+    };
+    // onClick: click x-axis tick label to hide/show
+    chartCfg.options.onClick = (event, elements, chart) => {
+      const state = RCP._chartState;
+      if (!state) return;
+      const scaleX = chart.scales.x;
+      if (!scaleX) return;
+      const bottom = chart.chartArea?.bottom;
+      if (bottom !== undefined && event.y < bottom) return;
+      let closest = -1, minDist = Infinity;
+      scaleX.ticks.forEach((tick, i) => {
+        const px = scaleX.getPixelForTick(i);
+        const d = Math.abs(px - event.x);
+        if (d < minDist) { minDist = d; closest = i; }
+      });
+      if (closest < 0 || minDist > 40) return;
+      const lbl = state.currentLabels?.[closest];
+      if (!lbl) return;
+      if (state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl);
+      else state.hiddenLabels.add(lbl);
+      rcpChartRefresh();
+    };
+    // Clear tools div
+    const toolsElEng = document.getElementById('rcp-enps-tools');
+    if (toolsElEng) { toolsElEng.style.display='none'; toolsElEng.innerHTML=''; }
+
   } else if(def.id==='historico_linea') {
-    const meds = rcpGetParam('meds') || RCP.mediciones;
+    const sortLine = rcpGetParam('sort') || 'default';
+    let meds = rcpGetParam('meds') || RCP.mediciones;
+    if (sortLine==='alpha_asc')  meds = [...meds].sort((a,b)=>a.localeCompare(b));
+    else if (sortLine==='alpha_desc') meds = [...meds].sort((a,b)=>b.localeCompare(a));
     const labels=meds, ds=[
       {label:'Engagement', data:meds.map(m=>rcpMean(rcpRowsByMed(m),'WORK_ENGAGEMENT')),
        borderColor:RCP_COLORS.engagement.border, backgroundColor:'transparent',
@@ -5836,6 +6182,28 @@ function rcpGenerate() {
         }
       }]
     };
+    // State for click-to-hide
+    RCP._chartState = {
+      horizontal: false,
+      allLabels: labels,
+      allData: [ds[0].data, ds[1].data],
+      benchVals: [], numMain: 2, allN: null,
+      hiddenLabels: new Set(), currentLabels: labels.slice(),
+    };
+    chartCfg.options.onClick = (event, elements, chart) => {
+      const state = RCP._chartState; if (!state) return;
+      const scaleX = chart.scales.x; if (!scaleX) return;
+      const bottom = chart.chartArea?.bottom;
+      if (bottom !== undefined && event.y < bottom) return;
+      let closest=-1, minDist=Infinity;
+      scaleX.ticks.forEach((tick,i)=>{const px=scaleX.getPixelForTick(i),d=Math.abs(px-event.x);if(d<minDist){minDist=d;closest=i;}});
+      if(closest<0||minDist>40) return;
+      const lbl=state.currentLabels?.[closest]; if(!lbl) return;
+      if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
+      rcpChartRefresh();
+    };
+    const toolsElLine = document.getElementById('rcp-enps-tools');
+    if (toolsElLine) { toolsElLine.style.display='none'; toolsElLine.innerHTML=''; }
 
   } else if(def.id==='recursos_demandas') {
     const med      = rcpGetParam('med') || (RCP.mediciones[RCP.mediciones.length-1]);
@@ -5877,12 +6245,22 @@ function rcpGenerate() {
       'HASSLES':           ['rgba(198,40,40,0.85)', 'rgba(198,40,40,1)'],
     };
     const allRd = ALL_DIMS.filter(d => d.tipo === 'recurso' || d.tipo === 'demanda');
+    const sortRd = rcpGetParam('sort') || 'default';
     // Sort by RD_ORDER; dimensions not in the list go to the end in original order
-    const dims = [...allRd].sort((a,b) => {
+    let dims = [...allRd].sort((a,b) => {
       const ia = RD_ORDER.indexOf(a.col), ib = RD_ORDER.indexOf(b.col);
       const wa = ia < 0 ? 999 : ia, wb = ib < 0 ? 999 : ib;
       return wa - wb;
     });
+    if (sortRd !== 'default') {
+      const baseRows = rcpRowsByMed(med);
+      const rdItems = dims.map(d => {
+        const colIdx = rcpColIdxFuzzy(d.col);
+        const vals = colIdx>=0 ? baseRows.map(r=>parseFloat(r[colIdx])).filter(v=>!isNaN(v)) : [];
+        return { label:d.label, val:vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:0, n:baseRows.length, _d:d };
+      });
+      dims = rcpSortBar(rdItems, sortRd).map(x=>x._d);
+    }
     const labels = dims.map(d => d.label);
 
     // Main rows
@@ -6049,6 +6427,29 @@ function rcpGenerate() {
       },
       plugins: [rdValueLabels]
     };
+    // State for click-to-hide (vertical bar, click x-axis labels)
+    const rdMainData = datasets.filter(d=>d.type!=='line').map(d=>d.data);
+    RCP._chartState = {
+      horizontal: false,
+      allLabels: labels,
+      allData: rdMainData,
+      benchVals: [], numMain: rdMainData.length, allN: null,
+      hiddenLabels: new Set(), currentLabels: labels.slice(),
+    };
+    chartCfg.options.onClick = (event, elements, chart) => {
+      const state = RCP._chartState; if (!state) return;
+      const scaleX = chart.scales.x; if (!scaleX) return;
+      const bottom = chart.chartArea?.bottom;
+      if (bottom !== undefined && event.y < bottom) return;
+      let closest=-1, minDist=Infinity;
+      scaleX.ticks.forEach((tick,i)=>{const px=scaleX.getPixelForTick(i),d=Math.abs(px-event.x);if(d<minDist){minDist=d;closest=i;}});
+      if(closest<0||minDist>40) return;
+      const lbl=state.currentLabels?.[closest]; if(!lbl) return;
+      if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
+      rcpChartRefresh();
+    };
+    const toolsElRd = document.getElementById('rcp-enps-tools');
+    if (toolsElRd) { toolsElRd.style.display='none'; toolsElRd.innerHTML=''; }
 
   } else if(def.id==='enps') {
     const meds = Array.isArray(rcpGetParam('meds')) ? rcpGetParam('meds') : (rcpGetParam('meds') ? [rcpGetParam('meds')] : RCP.mediciones);
@@ -6242,21 +6643,46 @@ function rcpGenerate() {
 
   } else if(def.id==='ranking_criticidad') {
     const med=rcpGetParam('med'), cla=rcpGetParam('cla');
+    const sortRC = rcpGetParam('sort') || 'default';
     const claIdx=RCP.headers.indexOf(cla);
     const medRows=rcpRowsByMed(med);
     const grps=[...new Set(medRows.map(r=>String(r[claIdx]||'').trim()).filter(Boolean))];
-    const data=grps.map(g=>{
+    let data=grps.map(g=>{
       const rows=medRows.filter(r=>String(r[claIdx]||'').trim()===g);
       const eng=rcpMean(rows,'WORK_ENGAGEMENT');
       const ago=rcpMean(rows,'EXHAUSTION');
       return{g,eng,ago,n:rows.length,criticidad:(ago||0)-(eng||0)};
-    }).sort((a,b)=>b.criticidad-a.criticidad);
-    const labels=data.map(d=>d.g);
+    });
+    if (sortRC==='default') data.sort((a,b)=>b.criticidad-a.criticidad);
+    else {
+      const rcItems = data.map(d=>({label:d.g, val:d.eng||0, n:d.n, _d:d}));
+      data = rcpSortBar(rcItems, sortRC).map(x=>x._d);
+    }
+    const labelsRC=data.map(d=>d.g);
     const ds=[
       {label:'Engagement', data:data.map(d=>d.eng), backgroundColor:RCP_COLORS.engagement.bg, borderColor:RCP_COLORS.engagement.border, borderWidth:1.5},
       {label:'Agotamiento', data:data.map(d=>d.ago), backgroundColor:RCP_COLORS.agotamiento.bg, borderColor:RCP_COLORS.agotamiento.border, borderWidth:1.5},
     ];
-    chartCfg = rcpBarChart(labels, ds, def.nombre+' — '+cla, true, {min:0,max:6});
+    chartCfg = rcpBarChart(labelsRC, ds, def.nombre+' — '+cla, true, {min:0,max:6});
+    RCP._chartState = {
+      horizontal: true,
+      allLabels: labelsRC,
+      allData: [data.map(d=>d.eng), data.map(d=>d.ago)],
+      benchVals: [], numMain: 2, allN: data.map(d=>d.n),
+      hiddenLabels: new Set(), currentLabels: labelsRC.slice(),
+    };
+    chartCfg.options.onClick = (event, elements, chart) => {
+      const state = RCP._chartState; if (!state) return;
+      const scaleY = chart.scales.y; if (!scaleY || event.x > scaleY.left) return;
+      let closest=-1, minDist=Infinity;
+      scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-event.y);if(d<minDist){minDist=d;closest=i;}});
+      if(closest<0||minDist>28) return;
+      const lbl=state.currentLabels?.[closest]; if(!lbl) return;
+      if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
+      rcpChartRefresh();
+    };
+    const toolsElRC = document.getElementById('rcp-enps-tools');
+    if (toolsElRC) { toolsElRC.style.display='none'; toolsElRC.innerHTML=''; }
 
   } else if(def.id==='optimo_critico') {
     const med=rcpGetParam('med'), cla=rcpGetParam('cla');
@@ -6272,46 +6698,89 @@ function rcpGenerate() {
     const p75eng=engVals_s[Math.floor(engVals_s.length*0.75)];
     const p25ago=agoVals_s[Math.floor(agoVals_s.length*0.25)];
     const p75ago=agoVals_s[Math.floor(agoVals_s.length*0.75)];
-    const grps=[...new Set(medRows.map(r=>String(r[claIdx]||'').trim()).filter(Boolean))].sort();
-    const optData=[], critData=[];
-    grps.forEach(g=>{
+    const sortOC = rcpGetParam('sort') || 'default';
+    let grps=[...new Set(medRows.map(r=>String(r[claIdx]||'').trim()).filter(Boolean))].sort();
+    const ocRaw = grps.map(g=>{
       const rows=medRows.filter(r=>String(r[claIdx]||'').trim()===g);
       const n=rows.length||1;
       const optimos=rows.filter(r=>parseFloat(r[engIdx])>=p75eng&&parseFloat(r[agoIdx])<=p25ago).length;
       const criticos=rows.filter(r=>parseFloat(r[engIdx])<=p25eng&&parseFloat(r[agoIdx])>=p75ago).length;
-      optData.push(+(optimos/n*100).toFixed(1));
-      critData.push(+(criticos/n*100).toFixed(1));
+      return{g, opt:+(optimos/n*100).toFixed(1), crit:+(criticos/n*100).toFixed(1), n:rows.length};
     });
+    const ocSorted = rcpSortBar(ocRaw.map(d=>({label:d.g,val:d.opt,opt:d.opt,crit:d.crit,n:d.n,_d:d})), sortOC).map(x=>x._d);
+    const ocLabels = ocSorted.map(d=>d.g);
     const ds=[
-      {label:'% Óptimo (alto ENG + bajo AGOT)', data:optData,  backgroundColor:RCP_COLORS.verde.bg,    borderColor:RCP_COLORS.verde.border,    borderWidth:1.5},
-      {label:'% Crítico (bajo ENG + alto AGOT)', data:critData, backgroundColor:RCP_COLORS.detractor.bg, borderColor:RCP_COLORS.detractor.border, borderWidth:1.5},
+      {label:'% Óptimo (alto ENG + bajo AGOT)', data:ocSorted.map(d=>d.opt),  backgroundColor:RCP_COLORS.verde.bg,    borderColor:RCP_COLORS.verde.border,    borderWidth:1.5},
+      {label:'% Crítico (bajo ENG + alto AGOT)', data:ocSorted.map(d=>d.crit), backgroundColor:RCP_COLORS.detractor.bg, borderColor:RCP_COLORS.detractor.border, borderWidth:1.5},
     ];
-    chartCfg = rcpBarChart(grps, ds, def.nombre+' — '+cla, false, {min:0,max:100,callback:v=>v+'%'});
+    chartCfg = rcpBarChart(ocLabels, ds, def.nombre+' — '+cla, false, {min:0,max:100,callback:v=>v+'%'});
+    RCP._chartState = {
+      horizontal: false,
+      allLabels: ocLabels,
+      allData: [ocSorted.map(d=>d.opt), ocSorted.map(d=>d.crit)],
+      benchVals: [], numMain: 2, allN: ocSorted.map(d=>d.n),
+      hiddenLabels: new Set(), currentLabels: ocLabels.slice(),
+    };
+    chartCfg.options.onClick = (event, elements, chart) => {
+      const state = RCP._chartState; if (!state) return;
+      const scaleX = chart.scales.x; if (!scaleX) return;
+      const bottom = chart.chartArea?.bottom;
+      if (bottom !== undefined && event.y < bottom) return;
+      let closest=-1, minDist=Infinity;
+      scaleX.ticks.forEach((tick,i)=>{const px=scaleX.getPixelForTick(i),d=Math.abs(px-event.x);if(d<minDist){minDist=d;closest=i;}});
+      if(closest<0||minDist>40) return;
+      const lbl=state.currentLabels?.[closest]; if(!lbl) return;
+      if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
+      rcpChartRefresh();
+    };
+    const toolsElOC = document.getElementById('rcp-enps-tools');
+    if (toolsElOC) { toolsElOC.style.display='none'; toolsElOC.innerHTML=''; }
 
   } else if(def.id==='demograficos') {
     const med=rcpGetParam('med');
+    const sortDem = rcpGetParam('sort') || 'default';
     const medRows=rcpRowsByMed(med);
     const demoFields=[
       {label:'Género',     col:RCP.headers.find(h=>rcpNorm(h).includes('genero'))},
       {label:'Generación', col:RCP.headers.find(h=>rcpNorm(h).includes('edad')||rcpNorm(h).includes('generacion'))},
       {label:'Antigüedad', col:RCP.headers.find(h=>rcpNorm(h).includes('antiguedad_rango'))},
     ].filter(d=>d.col);
-    const labels=[], engData=[], agoData=[];
+    let demItems=[];
     demoFields.forEach(field=>{
       const idx=RCP.headers.indexOf(field.col);
       const grps=[...new Set(medRows.map(r=>String(r[idx]||'').trim()).filter(Boolean))].sort();
       grps.forEach(g=>{
         const rows=medRows.filter(r=>String(r[idx]||'').trim()===g);
-        labels.push(field.label+': '+g);
-        engData.push(rcpMean(rows,'WORK_ENGAGEMENT'));
-        agoData.push(rcpMean(rows,'EXHAUSTION'));
+        demItems.push({label:field.label+': '+g, val:rcpMean(rows,'WORK_ENGAGEMENT')||0,
+          n:rows.length, eng:rcpMean(rows,'WORK_ENGAGEMENT'), ago:rcpMean(rows,'EXHAUSTION')});
       });
     });
+    demItems = rcpSortBar(demItems, sortDem);
+    const labelsD=demItems.map(x=>x.label);
     const ds=[
-      {label:'Engagement', data:engData, backgroundColor:RCP_COLORS.engagement.bg, borderColor:RCP_COLORS.engagement.border, borderWidth:1.5},
-      {label:'Agotamiento', data:agoData, backgroundColor:RCP_COLORS.agotamiento.bg, borderColor:RCP_COLORS.agotamiento.border, borderWidth:1.5},
+      {label:'Engagement', data:demItems.map(x=>x.eng), backgroundColor:RCP_COLORS.engagement.bg, borderColor:RCP_COLORS.engagement.border, borderWidth:1.5},
+      {label:'Agotamiento', data:demItems.map(x=>x.ago), backgroundColor:RCP_COLORS.agotamiento.bg, borderColor:RCP_COLORS.agotamiento.border, borderWidth:1.5},
     ];
-    chartCfg = rcpBarChart(labels, ds, def.nombre+' — '+med, true, {min:0,max:6});
+    chartCfg = rcpBarChart(labelsD, ds, def.nombre+' — '+med, true, {min:0,max:6});
+    RCP._chartState = {
+      horizontal: true,
+      allLabels: labelsD,
+      allData: [demItems.map(x=>x.eng), demItems.map(x=>x.ago)],
+      benchVals: [], numMain: 2, allN: demItems.map(x=>x.n),
+      hiddenLabels: new Set(), currentLabels: labelsD.slice(),
+    };
+    chartCfg.options.onClick = (event, elements, chart) => {
+      const state = RCP._chartState; if (!state) return;
+      const scaleY = chart.scales.y; if (!scaleY || event.x > scaleY.left) return;
+      let closest=-1, minDist=Infinity;
+      scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-event.y);if(d<minDist){minDist=d;closest=i;}});
+      if(closest<0||minDist>28) return;
+      const lbl=state.currentLabels?.[closest]; if(!lbl) return;
+      if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
+      rcpChartRefresh();
+    };
+    const toolsElDem = document.getElementById('rcp-enps-tools');
+    if (toolsElDem) { toolsElDem.style.display='none'; toolsElDem.innerHTML=''; }
   }
 
   if(!chartCfg) return;
