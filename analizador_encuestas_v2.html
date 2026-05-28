@@ -2867,7 +2867,7 @@ function s1BuildTree(rows, idIdx, jefIdx, idSet, noMatchSet, selfCycleIds) {
 
   // Construir objeto árbol recursivo para D3
   function buildNode(id, depth) {
-    if (depth > 200) return null; // safety: prevent infinite recursion
+    if (depth > 200) { console.error('buildNode: max depth exceeded at id=', id); return null; }
     const jef = jefaturaOf[id] || '';
     // Error: sin jefatura O jefatura inexistente O auto-ciclo (jef===id, ya excluido del adj)
     const isSelfCycle = jef !== '' && jef === id;
@@ -3574,6 +3574,10 @@ function s1RenderProblemsTable(r) {
     </tr>`).join('');
 }
 
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 // Descarga: reporte Sección 1
 // ─── DESCARGA HTML INTERACTIVO ────────────────────────────────────────────────
 function s1DownloadOrgHtml() {
@@ -3647,7 +3651,7 @@ function s1DownloadOrgHtml() {
       const sjRows = sinJef.map(row => {
         const id     = String(row[_hmIdIdx] || '').trim();
         const nombre = _hmGetName(id);
-        return `<tr><td style="font-weight:600">${id}</td><td>${nombre || '—'}</td><td style="color:#8B2020">Campo vacío — debe asignarse una jefatura</td></tr>`;
+        return `<tr><td style="font-weight:600">${escHtml(id)}</td><td>${escHtml(nombre) || '—'}</td><td style="color:#8B2020">Campo vacío — debe asignarse una jefatura</td></tr>`;
       }).join('');
       noJefHtml = `
     <div class="anomaly-section" style="background:#FFF8F8;border-top:1px solid #E8BABA">
@@ -3666,7 +3670,7 @@ function s1DownloadOrgHtml() {
   if (S1.orgResult?.available && S1.orgResult.noMatch.length) {
     const nmRows = S1.orgResult.noMatch.map(x => {
       const nombre = _hmGetName(x.id);
-      return `<tr><td style="font-weight:600">${x.id}</td><td>${nombre || '—'}</td><td style="color:#8B2020;font-weight:600">${x.jef}</td></tr>`;
+      return `<tr><td style="font-weight:600">${escHtml(x.id)}</td><td>${escHtml(nombre) || '—'}</td><td style="color:#8B2020;font-weight:600">${escHtml(x.jef)}</td></tr>`;
     }).join('');
     noMatchHtml = `
     <div class="anomaly-section" style="background:#FFF8F8;border-top:1px solid #E8BABA">
@@ -3683,7 +3687,7 @@ function s1DownloadOrgHtml() {
   let anomalyHtml = '';
   if (S1_ANOMALY_DETAILS.length) {
     const rows = S1_ANOMALY_DETAILS.map(a =>
-      `<tr><td>${a.id}</td><td><span class="badge-seg" style="background:${S1_SEG_VALUE_TO_COLOR[a.ownSeg]||'#999'}">${a.ownSeg}</span></td><td><span class="badge-seg" style="background:${S1_SEG_VALUE_TO_COLOR[a.neighborSeg]||'#999'}">${a.neighborSeg}</span></td><td style="text-align:center">${a.neighborCount}</td></tr>`
+      `<tr><td>${escHtml(a.id)}</td><td><span class="badge-seg" style="background:${S1_SEG_VALUE_TO_COLOR[a.ownSeg]||'#999'}">${escHtml(a.ownSeg)}</span></td><td><span class="badge-seg" style="background:${S1_SEG_VALUE_TO_COLOR[a.neighborSeg]||'#999'}">${escHtml(a.neighborSeg)}</span></td><td style="text-align:center">${a.neighborCount}</td></tr>`
     ).join('');
     anomalyHtml = `
     <div class="anomaly-section">
@@ -4253,7 +4257,7 @@ function rSelectAll(val) {
 }
 
 function rReset() {
-  R = { headers:[], rows:[], filename:'', mediciones:[], selectedMeds:[] };
+  R = { headers:[], rows:[], filename:'', mediciones:[], selectedMeds:[], _demoTmp: null };
   document.getElementById('r-fi').value = '';
   document.getElementById('r-upload-wrap').style.display = 'block';
   document.getElementById('r-config-wrap').style.display = 'none';
@@ -4591,6 +4595,10 @@ function rcGenerate() {
     });
   }
 
+  const isHorizontal = type === 'bar' || type === 'bar100';
+  const isLine = type === 'line';
+  const isScatter = type === 'scatter';
+
   // Apply sort to labels (not histogram/scatter)
   if (rcSort !== 'default' && !isScatter && type !== 'histogram' && labels.length > 0) {
     const firstDs = datasets[0];
@@ -4624,10 +4632,6 @@ function rcGenerate() {
   }
 
   const ctx = rcCanvas.getContext('2d');
-
-  const isHorizontal = type === 'bar' || type === 'bar100';
-  const isLine = type === 'line';
-  const isScatter = type === 'scatter';
 
   const chartCfg = {
     type: isScatter ? 'scatter' : isLine ? 'line' : 'bar',
@@ -5105,6 +5109,8 @@ function rcpSelectDef(i) {
 
 function rcpBack() {
   if(RCP.chart){RCP.chart.destroy();RCP.chart=null;}
+  const _rcpBackCanvas = document.getElementById('rcp-canvas');
+  if (_rcpBackCanvas) _rcpBackCanvas.removeEventListener('click', rcpNativeCanvasClick);
   document.getElementById('rcp-config-wrap').style.display='none';
   document.getElementById('rcp-grid-wrap').style.display='block';
   document.getElementById('rcp-preview-wrap').style.display='none';
@@ -6418,8 +6424,8 @@ function rcpGenerate() {
         if(engIdx >= 0 && agoIdx >= 0) {
           const eVals = allRows.map(r=>parseFloat(r[engIdx])).filter(v=>!isNaN(v)).sort((a,b)=>a-b);
           const aVals = allRows.map(r=>parseFloat(r[agoIdx])).filter(v=>!isNaN(v)).sort((a,b)=>a-b);
-          const p75e=eVals[Math.floor(eVals.length*0.75)], p25e=eVals[Math.floor(eVals.length*0.25)];
-          const p25a=aVals[Math.floor(aVals.length*0.25)], p75a=aVals[Math.floor(aVals.length*0.75)];
+          const p75e=calcPercentile(eVals,75), p25e=calcPercentile(eVals,25);
+          const p25a=calcPercentile(aVals,25), p75a=calcPercentile(aVals,75);
           if(isOpt) {
             lineRows = allRows.filter(r=>parseFloat(r[engIdx])>=p75e && parseFloat(r[agoIdx])<=p25a);
             lineLabel = 'Óptimo org: '+lineMed;
@@ -6988,10 +6994,10 @@ function rcpGenerate() {
     // Percentile thresholds on the filtered population
     const eVals = baseRows.map(r=>parseFloat(r[engIdx])).filter(v=>!isNaN(v)).sort((a,b)=>a-b);
     const aVals = baseRows.map(r=>parseFloat(r[agoIdx])).filter(v=>!isNaN(v)).sort((a,b)=>a-b);
-    const p75e = eVals[Math.floor(eVals.length*0.75)];
-    const p25e = eVals[Math.floor(eVals.length*0.25)];
-    const p25a = aVals[Math.floor(aVals.length*0.25)];
-    const p75a = aVals[Math.floor(aVals.length*0.75)];
+    const p75e = calcPercentile(eVals, 75);
+    const p25e = calcPercentile(eVals, 25);
+    const p25a = calcPercentile(aVals, 25);
+    const p75a = calcPercentile(aVals, 75);
 
     const optimoRows  = baseRows.filter(r => parseFloat(r[engIdx])>=p75e && parseFloat(r[agoIdx])<=p25a);
     const criticoRows = baseRows.filter(r => parseFloat(r[engIdx])<=p25e && parseFloat(r[agoIdx])>=p75a);
@@ -7486,7 +7492,7 @@ function rcpDdr(e){e.preventDefault();rcpDol();const f=e.dataTransfer.files[0];i
 
 
 function rcReset() {
-  RC.chart = null;
+  if (RC.chart) { RC.chart.destroy(); RC.chart = null; }
   RC.headers=[]; RC.rows=[]; RC.filename=''; RC.mediciones=[]; RC.selectedMeds=[];
   if(document.getElementById('rc-fi')) document.getElementById('rc-fi').value='';
   document.getElementById('rc-upload-wrap').style.display='block';
