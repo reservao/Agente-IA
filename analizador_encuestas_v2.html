@@ -4865,6 +4865,7 @@ const RCP_DEFS = [
       { id:'comp_med',  tipo:'med_opt',         label:'Medición del comparativo (barras grises)' },
       { id:'comp_seg',  tipo:'seg_col_rd_comp', label:'Filtrar comparativo por clasificación (opcional)' },
       { id:'comp_lines', tipo:'comp_rd_lines',   label:'Líneas comparativas (promedio org u otro segmento)' },
+      { id:'bench_ext',  tipo:'benchmark_manual', label:'Benchmark externo (línea con valores manuales)' },
     ]
   },
   {
@@ -5283,6 +5284,47 @@ function renderRcpParams() {
           style="align-self:flex-start;padding:5px 12px;font-size:12px;border:1px dashed var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--accent);cursor:pointer">
           + Agregar línea comparativa
         </button>
+      </div>`;
+    } else if(p.tipo==='benchmark_manual') {
+      const bmDims = [
+        {label:'Autoeficacia',             col:'SELF_EFFICACY'},
+        {label:'Optimismo',                col:'OPTIMISM'},
+        {label:'Oport. Desarrollo',        col:'OPPORTUNITIES_FOR_DEVELOPMENT'},
+        {label:'Coaching del Líder',       col:'COACH'},
+        {label:'Retroalimentación',        col:'FEEDBACK'},
+        {label:'Colaboración',             col:'SOCIAL_SUPPORT'},
+        {label:'Autonomía',                col:'AUTONOMY'},
+        {label:'Presión en el Trabajo',    col:'WORK_PRESSURE'},
+        {label:'Demandas Cognitivas',      col:'COGNITIVE_DEMANDS'},
+        {label:'Demandas Emocionales',     col:'EMOTIONAL_DEMANDS'},
+        {label:'Conflicto de Rol',         col:'ROLE_CONFLICT'},
+        {label:'Trabas en el Trabajo',     col:'HASSLES'},
+      ].filter(d => rcpColIdxFuzzy(d.col)>=0);
+      const dimInputs = bmDims.map(d =>
+        `<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)">
+          <span style="min-width:130px">${d.label}</span>
+          <input type="number" id="rcp_bench_ext_${d.col}" placeholder="—" step="0.01" min="1" max="6"
+            style="width:64px;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text)">
+        </label>`
+      ).join('');
+      html += `<div style="display:flex;flex-direction:column;gap:8px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="rcp_bench_ext_enabled" style="cursor:pointer;accent-color:var(--accent)"
+            onchange="document.getElementById('rcp_bench_ext_body').style.opacity=this.checked?'1':'0.4'">
+          Activar benchmark externo
+        </label>
+        <div id="rcp_bench_ext_body" style="display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);opacity:0.4">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <input type="text" id="rcp_bench_ext_name" value="Benchmark externo" placeholder="Nombre de la línea"
+              style="flex:1;min-width:160px;padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);color:var(--text)">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)">
+              Color <input type="color" id="rcp_bench_ext_color" value="#E53935" style="width:26px;height:26px;border:none;padding:0;cursor:pointer;border-radius:4px">
+            </label>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:4px 16px">
+            ${dimInputs}
+          </div>
+        </div>
       </div>`;
     }
     html += '</div>';
@@ -6398,6 +6440,28 @@ function rcpGenerate() {
         }
       }
     });
+
+    // External benchmark line (manual per-dimension values)
+    const benchExtEnabled = document.getElementById('rcp_bench_ext_enabled')?.checked;
+    if(benchExtEnabled) {
+      const benchExtName  = document.getElementById('rcp_bench_ext_name')?.value.trim() || 'Benchmark externo';
+      const benchExtColor = document.getElementById('rcp_bench_ext_color')?.value || '#E53935';
+      const benchExtData  = dims.map(d => {
+        const v = parseFloat(document.getElementById('rcp_bench_ext_'+d.col)?.value);
+        return isNaN(v) ? null : +v.toFixed(3);
+      });
+      if(benchExtData.some(v => v !== null)) {
+        const br=parseInt(benchExtColor.slice(1,3),16), bg2=parseInt(benchExtColor.slice(3,5),16), bb=parseInt(benchExtColor.slice(5,7),16);
+        datasets.push({
+          label: benchExtName, type: 'line',
+          data: benchExtData,
+          borderColor: benchExtColor, backgroundColor: `rgba(${br},${bg2},${bb},0.08)`,
+          pointBackgroundColor: benchExtColor, pointBorderColor:'#fff', pointBorderWidth:2,
+          borderWidth: 2.5, borderDash: [6,4], tension: 0.25, pointRadius: 5, pointHoverRadius: 7,
+          spanGaps: true, order: 20,
+        });
+      }
+    }
 
     const nBars = dims.length;
     const valFontSize = nBars > 15 ? 8 : (nBars > 8 ? 9 : 11);
