@@ -7392,13 +7392,34 @@ function rcpSetChartHeight(h) {
   if (RCP._enpsState) { RCP._enpsState.alturaOverride = h; }
 }
 
-function rcpCaptureTablePNG(el) {
-  html2canvas(el, {scale:2, backgroundColor:'#ffffff', useCORS:true}).then(canvas => {
+function rcpCaptureTablePNG(wrap) {
+  const table = wrap.querySelector('#dem-table') || wrap;
+  // Temporarily remove overflow clipping so html2canvas sees the full table
+  const prevOverflow = wrap.style.overflow;
+  const prevWidth    = wrap.style.width;
+  wrap.style.overflow = 'visible';
+  wrap.style.width    = table.scrollWidth + 'px';
+
+  html2canvas(table, {
+    scale: 2,
+    backgroundColor: '#ffffff',
+    useCORS: true,
+    scrollX: 0, scrollY: 0,
+    width:  table.scrollWidth,
+    height: table.scrollHeight,
+    windowWidth: document.documentElement.scrollWidth,
+  }).then(canvas => {
+    wrap.style.overflow = prevOverflow;
+    wrap.style.width    = prevWidth;
     const a = document.createElement('a');
     a.download = (RCP.currentDef?.nombre||'tabla').replace(/[^\w\s-]/g,'') + '.png';
     a.href = canvas.toDataURL('image/png', 1.0);
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  }).catch(()=>alert('No se pudo exportar la tabla como PNG.'));
+  }).catch(()=>{
+    wrap.style.overflow = prevOverflow;
+    wrap.style.width    = prevWidth;
+    alert('No se pudo exportar la tabla como PNG.');
+  });
 }
 
 function rcpDownloadPNG() {
