@@ -4892,10 +4892,10 @@ const RCP_DEFS = [
     tipo: 'bar_scatter',
     requiere: ['WORK_ENGAGEMENT','EXHAUSTION'],
     params: [
-      { id:'med',  tipo:'med_single',   label:'Medición a analizar' },
-      { id:'cla',  tipo:'cla_col',      label:'Clasificación a usar' },
-      { id:'sort', tipo:'sort_bar',     label:'Ordenar por' },
-      { id:'scale',tipo:'scale_minmax', label:'Escala del eje valor' }
+      { id:'meds', tipo:'meds_multi',  label:'Mediciones a incluir' },
+      { id:'cla',  tipo:'seg_col',     label:'Agrupar por clasificación' },
+      { id:'sort', tipo:'sort_bar',    label:'Ordenar por' },
+      { id:'scale',tipo:'scale_minmax',label:'Escala del eje valor' }
     ]
   },
   {
@@ -6725,24 +6725,48 @@ function rcpGenerate() {
     }, plugins:[enpsValueLabels] };
 
   } else if(def.id==='ranking_criticidad') {
-    const med=rcpGetParam('med'), cla=rcpGetParam('cla');
-    const sortRC = rcpGetParam('sort') || 'default';
+    const meds = Array.isArray(rcpGetParam('meds')) ? rcpGetParam('meds') : (rcpGetParam('meds') ? [rcpGetParam('meds')] : RCP.mediciones);
+    const cla  = rcpGetParam('cla') || '';
+    const sortRC  = rcpGetParam('sort') || 'default';
     const scaleMin = parseFloat(document.getElementById('rcp_scale_min')?.value ?? '1') || 1;
     const scaleMax = parseFloat(document.getElementById('rcp_scale_max')?.value ?? '6') || 6;
-    const claIdx=RCP.headers.indexOf(cla);
-    const medRows=rcpRowsByMed(med);
-    const grps=[...new Set(medRows.map(r=>String(r[claIdx]||'').trim()).filter(Boolean))];
-    let data=grps.map(g=>{
-      const rows=medRows.filter(r=>String(r[claIdx]||'').trim()===g);
-      const eng=rcpMean(rows,'WORK_ENGAGEMENT');
-      const ago=rcpMean(rows,'EXHAUSTION');
-      return{g,eng,ago,n:rows.length,criticidad:(ago||0)-(eng||0)};
-    });
+
+    // Build rows depending on mode
+    let data = [];
+    if (cla === '__org__') {
+      // Single row: whole organisation, all selected measurements aggregated
+      const allRows = meds.flatMap(m => rcpRowsByMed(m));
+      const eng = rcpMean(allRows, 'WORK_ENGAGEMENT');
+      const ago = rcpMean(allRows, 'EXHAUSTION');
+      data = [{ g:'Organización', eng, ago, n:allRows.length, criticidad:(ago||0)-(eng||0) }];
+    } else if (!cla) {
+      // One row per measurement (compare across time)
+      data = meds.map(m => {
+        const rows = rcpRowsByMed(m);
+        const eng = rcpMean(rows, 'WORK_ENGAGEMENT');
+        const ago = rcpMean(rows, 'EXHAUSTION');
+        return { g:m, eng, ago, n:rows.length, criticidad:(ago||0)-(eng||0) };
+      });
+    } else {
+      // Break by classification column, aggregate all selected measurements
+      const claIdx = RCP.headers.indexOf(cla);
+      const allRows = meds.flatMap(m => rcpRowsByMed(m));
+      const grps = [...new Set(allRows.map(r => String(r[claIdx]||'').trim()).filter(Boolean))];
+      data = grps.map(g => {
+        const rows = allRows.filter(r => String(r[claIdx]||'').trim() === g);
+        const eng = rcpMean(rows, 'WORK_ENGAGEMENT');
+        const ago = rcpMean(rows, 'EXHAUSTION');
+        return { g, eng, ago, n:rows.length, criticidad:(ago||0)-(eng||0) };
+      });
+    }
+    if (!data.length) { alert('No hay datos para generar el gráfico.'); return; }
+
     if (sortRC==='default') data.sort((a,b)=>b.criticidad-a.criticidad);
     else {
       const rcItems = data.map(d=>({label:d.g, val:d.eng||0, n:d.n, _d:d}));
       data = rcpSortBar(rcItems, sortRC).map(x=>x._d);
     }
+    const claLabel = cla === '__org__' ? 'Organización' : (!cla ? 'Por medición' : cla);
     const labelsRC=data.map(d=>d.g);
     const nPerGroupRC=data.map(d=>d.n);
     // Gradient colours (horizontal: left=lighter base, right=full colour)
@@ -6826,7 +6850,7 @@ function rcpGenerate() {
         responsive:true, maintainAspectRatio:false,
         layout:{ padding:{ top:16, bottom:16, left:0, right:44 } },
         plugins:{
-          title:{ display:true, text:def.nombre+' — '+cla, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
+          title:{ display:true, text:def.nombre+' — '+claLabel, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
           legend:{ display:true, position:'bottom', labels:{font:{size:11}, padding:14} },
           tooltip:{ callbacks:{ label: ctx => {
             const n = nPerGroupRC[ctx.dataIndex];
