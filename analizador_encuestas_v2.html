@@ -616,10 +616,13 @@ tr:hover td { background: var(--bg); }
         <div class="slbl">Descargar</div>
         <div class="dl-item">
           <div>
-            <div class="dl-title">Organigrama (imagen PNG)</div>
-            <div class="dl-sub">Árbol jerárquico completo en alta resolución · abre en cualquier visor o imprime directamente</div>
+            <div class="dl-title">Organigrama (imagen PNG / SVG)</div>
+            <div class="dl-sub">PNG captura la vista actual (ajusta zoom antes de descargar) · SVG descarga el árbol completo en vector</div>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="s1DownloadOrgPDF()">⬇ Descargar PNG</button>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-secondary btn-sm" onclick="s1DownloadOrgPDF()">⬇ PNG (vista actual)</button>
+            <button class="btn btn-secondary btn-sm" onclick="s1DownloadOrgSvg()">⬇ SVG completo</button>
+          </div>
         </div>
         <div class="dl-item">
           <div>
@@ -3219,14 +3222,24 @@ function s1DownloadOrgPDF() {
   const btn = document.querySelector('[onclick="s1DownloadOrgPDF()"]');
   if (btn) { btn.textContent = 'Generando…'; btn.disabled = true; }
 
-  let bb;
-  try { bb = g.getBBox(); } catch(e) { bb = {x:0, y:0, width:800, height:600}; }
-  if (!bb.width || !bb.height) bb = {x:0, y:0, width:800, height:600};
-  const pad = 50;
-  const svgW = Math.ceil(bb.width  + pad * 2);
-  const svgH = Math.ceil(bb.height + pad * 2);
+  // Capture the CURRENT VIEWPORT (what the user sees) instead of the full tree.
+  // This avoids browser canvas size limits that cause img.onload to never fire
+  // when the full org is tens of thousands of pixels wide.
+  const dispW = svgEl.clientWidth  || 900;
+  const dispH = svgEl.clientHeight || 560;
 
-  // Layout: panel de leyenda a la IZQUIERDA, organigrama a la DERECHA, misma altura
+  // Current D3 zoom transform on the SVG element
+  let t;
+  try { t = d3.zoomTransform(svgEl); } catch(e) { t = {k:1, x:0, y:0}; }
+  const k = t.k || 1;
+
+  // Viewport in g's local coordinate space (before transform)
+  const vpX = -t.x / k;
+  const vpY = -t.y / k;
+  const vpW = dispW / k;
+  const vpH = dispH / k;
+
+  // Legend panel
   const segEntries = Object.entries(S1_SEG_VALUE_TO_COLOR);
   const hasLegend  = segEntries.length > 0;
 
@@ -3245,127 +3258,99 @@ function s1DownloadOrgPDF() {
     ctx.closePath();
   }
 
-  // Medidas del panel lateral de leyenda
   const SWATCH  = 13;
   const ROW_H   = 22;
   const IPAD    = 14;
-  const FONT_PX = 11; // px para medir texto aproximado
-  // Calcular ancho necesario para el label más largo (aprox 7px por char + icono + padding)
+  const FONT_PX = 11;
   const longestLabel = segEntries.reduce((mx, [seg]) => Math.max(mx, seg.length), 0);
   const LEG_W   = hasLegend ? Math.max(160, Math.min(280, IPAD * 2 + SWATCH + 8 + longestLabel * 7)) : 0;
   const LEG_H_content = hasLegend
     ? (IPAD * 2 + 20 + segEntries.length * ROW_H + (S1_ANOMALY_DETAILS.length ? 28 : 0))
     : 0;
 
-  // Panel lateral: fondo gris claro del mismo alto que el árbol
-  function drawLegendPanel(ctx, orgW, orgH) {
+  function drawLegendPanel(ctx, orgH) {
     if (!hasLegend) return;
-
-    // Fondo del panel lateral
     ctx.fillStyle = '#F0EDE8';
     ctx.fillRect(0, 0, LEG_W, orgH);
-
-    // Línea separadora vertical
     ctx.strokeStyle = '#C8C4BC';
     ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(LEG_W, 0);
-    ctx.lineTo(LEG_W, orgH);
-    ctx.stroke();
-
-    // Posición vertical centrada del bloque de leyenda
+    ctx.beginPath(); ctx.moveTo(LEG_W, 0); ctx.lineTo(LEG_W, orgH); ctx.stroke();
     const by = Math.max(IPAD, (orgH - LEG_H_content) / 2);
-
-    // Título de clasificación
     const titleRaw = S1_SEG_COL || 'Segmentación';
     ctx.fillStyle = '#1A2B4A';
     ctx.font = `bold ${FONT_PX + 1}px Arial, sans-serif`;
-    // Ajustar título al ancho disponible
     let title = titleRaw;
-    while (title.length > 6 && ctx.measureText(title).width > LEG_W - IPAD * 2) {
-      title = title.slice(0, -1);
-    }
+    while (title.length > 6 && ctx.measureText(title).width > LEG_W - IPAD * 2) title = title.slice(0, -1);
     if (title !== titleRaw) title = title.slice(0, -1) + '…';
     ctx.fillText(title, IPAD, by + FONT_PX + 2);
-
-    // Línea separadora bajo el título
-    ctx.strokeStyle = '#C8C4BC';
-    ctx.lineWidth = 0.7;
-    ctx.beginPath();
-    ctx.moveTo(IPAD, by + FONT_PX + 8);
-    ctx.lineTo(LEG_W - IPAD, by + FONT_PX + 8);
-    ctx.stroke();
-
-    // Items de segmento — nombre completo, sin cortar
+    ctx.strokeStyle = '#C8C4BC'; ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.moveTo(IPAD, by + FONT_PX + 8); ctx.lineTo(LEG_W - IPAD, by + FONT_PX + 8); ctx.stroke();
     segEntries.forEach(([seg, color], i) => {
       const iy = by + FONT_PX + 14 + i * ROW_H;
-
-      // Cuadro de color
       ctx.fillStyle = color;
       ctxRoundRect(ctx, IPAD, iy + 3, SWATCH, SWATCH, 3);
       ctx.fill();
-
-      // Nombre completo del segmento — wrap si es muy largo
       ctx.fillStyle = '#1A2B4A';
       ctx.font = `${FONT_PX}px Arial, sans-serif`;
       const maxW = LEG_W - IPAD * 2 - SWATCH - 8;
       let label = seg;
-      // Truncar solo si absolutamente no cabe en una línea
-      while (label.length > 4 && ctx.measureText(label).width > maxW) {
-        label = label.slice(0, -1);
-      }
+      while (label.length > 4 && ctx.measureText(label).width > maxW) label = label.slice(0, -1);
       if (label !== seg) label = label.slice(0, -1) + '…';
       ctx.fillText(label, IPAD + SWATCH + 8, iy + SWATCH / 2 + 4 + 3);
     });
-
-    // Nota sobre nodos anómalos
     if (S1_ANOMALY_DETAILS.length) {
       const ny = by + FONT_PX + 14 + segEntries.length * ROW_H + 6;
       ctx.fillStyle = '#CC6600';
       ctx.font = `bold 9px Arial, sans-serif`;
       ctx.fillText(`⚠ ${S1_ANOMALY_DETAILS.length} aislado(s)`, IPAD, ny + 10);
-      ctx.font = `9px Arial, sans-serif`;
-      ctx.fillStyle = '#888';
+      ctx.font = `9px Arial, sans-serif`; ctx.fillStyle = '#888';
       ctx.fillText('(segmento ≠ vecinos)', IPAD, ny + 22);
     }
   }
 
-  // Clonar SVG con viewBox ajustado al contenido completo
+  // Clone SVG — set viewBox to the current viewport so only what's visible is rendered.
+  // This keeps the declared SVG dimensions small (display pixels, not tree pixels).
   const clone = svgEl.cloneNode(true);
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-  clone.setAttribute('width',  svgW);
-  clone.setAttribute('height', svgH);
-  clone.setAttribute('viewBox', `${bb.x - pad} ${bb.y - pad} ${svgW} ${svgH}`);
+  clone.setAttribute('width',  dispW);
+  clone.setAttribute('height', dispH);
+  clone.setAttribute('viewBox', `${vpX} ${vpY} ${vpW} ${vpH}`);
   const cloneG = clone.querySelector('#s1org-g');
-  if (cloneG) cloneG.setAttribute('transform', '');
+  if (cloneG) cloneG.setAttribute('transform', ''); // viewBox handles positioning
 
-  // Fuente inline para Canvas
-  const style = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-  style.textContent = 'text { font-family: Arial, sans-serif; }';
-  clone.insertBefore(style, clone.firstChild);
+  const styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+  styleEl.textContent = 'text { font-family: Arial, sans-serif; }';
+  clone.insertBefore(styleEl, clone.firstChild);
 
   const svgStr = new XMLSerializer().serializeToString(clone);
 
   const SCALE  = 2;
-  const totalW = LEG_W + svgW;
+  const totalW = LEG_W + dispW;
   const img = new Image();
 
-  // Use Blob URL instead of base64 data URI — avoids canvas taint SecurityError in Chrome
   const svgBlob = new Blob([svgStr], {type: 'image/svg+xml;charset=utf-8'});
   const blobUrl = URL.createObjectURL(svgBlob);
 
+  // Safety: if onload never fires within 15s, unblock button
+  const timeoutId = setTimeout(() => {
+    URL.revokeObjectURL(blobUrl);
+    if (btn) { btn.textContent = '⬇ Descargar PNG'; btn.disabled = false; }
+    alert('Tiempo de espera agotado. Intenta con el botón Descargar SVG o ajusta el zoom antes de capturar.');
+  }, 15000);
+
   img.onload = () => {
+    clearTimeout(timeoutId);
     URL.revokeObjectURL(blobUrl);
     try {
       const canvas = document.createElement('canvas');
       canvas.width  = totalW * SCALE;
-      canvas.height = svgH * SCALE;
+      canvas.height = dispH * SCALE;
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.scale(SCALE, SCALE);
-      ctx.drawImage(img, LEG_W, 0, svgW, svgH);
-      drawLegendPanel(ctx, svgW, svgH);
+      ctx.drawImage(img, LEG_W, 0, dispW, dispH);
+      drawLegendPanel(ctx, dispH);
 
       canvas.toBlob(blob => {
         const url  = URL.createObjectURL(blob);
@@ -3387,8 +3372,9 @@ function s1DownloadOrgPDF() {
   };
 
   img.onerror = () => {
+    clearTimeout(timeoutId);
     URL.revokeObjectURL(blobUrl);
-    // Fallback: descargar SVG directamente
+    // Fallback: download SVG directly
     const fallbackBlob = new Blob([svgStr], {type:'image/svg+xml;charset=utf-8'});
     const url  = URL.createObjectURL(fallbackBlob);
     const link = document.createElement('a');
@@ -3402,6 +3388,33 @@ function s1DownloadOrgPDF() {
   };
 
   img.src = blobUrl;
+}
+
+function s1DownloadOrgSvg() {
+  const svgEl = document.getElementById('s1org-svg');
+  const g     = document.getElementById('s1org-g');
+  if (!svgEl || !g || !g.children.length) {
+    alert('El organigrama no está disponible.');
+    return;
+  }
+  let bb;
+  try { bb = g.getBBox(); } catch(e) { bb = {x:0,y:0,width:800,height:600}; }
+  if (!bb.width || !bb.height) bb = {x:0,y:0,width:800,height:600};
+  const pad = 40;
+  const svgW = Math.ceil(bb.width + pad*2), svgH = Math.ceil(bb.height + pad*2);
+  const clone = svgEl.cloneNode(true);
+  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  clone.setAttribute('width', svgW); clone.setAttribute('height', svgH);
+  clone.setAttribute('viewBox', `${bb.x-pad} ${bb.y-pad} ${svgW} ${svgH}`);
+  const cg = clone.querySelector('#s1org-g'); if(cg) cg.setAttribute('transform','');
+  const st = document.createElementNS('http://www.w3.org/2000/svg','style');
+  st.textContent = 'text{font-family:Arial,sans-serif}'; clone.insertBefore(st, clone.firstChild);
+  const blob = new Blob([new XMLSerializer().serializeToString(clone)], {type:'image/svg+xml;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = (S1.filename||'organigrama').replace(/\.\w+$/,'')+'_organigrama.svg';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 // Paso 4: Organigrama
@@ -3784,17 +3797,22 @@ ${anomalyHtml}
     try {
       const bb = inner.getBBox();
       if (!bb.width || !bb.height) return;
-      const W = svg.clientWidth  || svg.parentElement?.clientWidth  || 900;
-      const H = svg.clientHeight || svg.parentElement?.clientHeight || 600;
+      const W = svg.clientWidth  || svg.parentElement?.clientWidth  || 1200;
+      const H = svg.clientHeight || svg.parentElement?.clientHeight || 700;
       if (!W || !H) return;
-      const sc = Math.min(0.9, W / (bb.width + 80), H / (bb.height + 80));
-      const tx = W/2 - (bb.x + bb.width/2) * sc;
-      const ty = H/2 - (bb.y + bb.height/2) * sc;
+      // Fit by HEIGHT so tree levels are legible; user can pan left/right for wide orgs.
+      // scByH fits all depth levels in the viewport. scByW is used only if org is narrower than viewport.
+      const scByH = H / (bb.height + 80);
+      const scByW = W / (bb.width  + 80);
+      const sc = Math.min(0.95, Math.max(scByH, scByW));
+      // Center horizontally on root, anchor to top of tree
+      const tx = W / 2 - (bb.x + bb.width / 2) * sc;
+      const ty = 40 - bb.y * sc;
       d3.select(svg).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(sc));
     } catch(e) {}
   }
 
-  // Defer so the browser has completed layout before measuring dimensions
+  // Double rAF: ensures browser has completed layout before measuring clientWidth/Height
   requestAnimationFrame(() => requestAnimationFrame(fitView));
 
   window.zoomIn    = () => d3.select(svg).call(zoom.scaleBy, 1.3);
