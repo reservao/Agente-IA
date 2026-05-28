@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ollama-coder": {
+      "type": "stdio",
+      "command": "python3",
+      "args": ["/home/user/Agente-IA/.claude/ollama_tool.py"]
+    }
+  }
+}
