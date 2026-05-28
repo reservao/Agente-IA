@@ -7215,14 +7215,20 @@ function rcpGenerate() {
     // ── Build HTML ────────────────────────────────────────────────────────
     const groupSpans = demGroups.map(g=>({label:g.label, span:g.vals.length}));
 
+    // Pre-compute group-start column indices for separator styling
+    const groupStartSet = new Set();
+    let _gci = 0;
+    for(const g of demGroups){ groupStartSet.add(_gci); _gci += g.vals.length; }
+
     // thead row 1: group headers — colspan=2 covers vertical-label + dim-name columns
     let theadR1 = `<th colspan="2" rowspan="2" style="text-align:left;min-width:160px">Valores</th>`;
     for(const gs of groupSpans) theadR1+=`<th colspan="${gs.span}" class="dem-group">${gs.label}</th>`;
-    theadR1+=`<th rowspan="2">Total general</th>`;
+    theadR1+=`<th rowspan="2" class="dem-total-hdr">Total general</th>`;
 
-    // thead row 2: individual column headers
-    let theadR2='';
-    for(const g of demGroups) for(const v of g.vals) theadR2+=`<th>${v}</th>`;
+    // thead row 2: individual column headers with group-start class
+    let theadR2='', _gci2=0;
+    for(const g of demGroups) for(let vi=0; vi<g.vals.length; vi++,_gci2++)
+      theadR2+=`<th${vi===0?' class="dem-col-gstart"':''}>${g.vals[vi]}</th>`;
 
     // tbody rows
     let tbody='';
@@ -7243,11 +7249,10 @@ function rcpGenerate() {
 
       tbody+=`<tr class="${rowClass}">${firstCell}<td style="text-align:left;padding-left:10px">${dim.label}</td>`;
       colVals.forEach((v,ci)=>{
-        const cls=colors[ci]?` class="dem-${colors[ci]}"`:''
-        tbody+=`<td${cls}>${v!==null?v:'—'}</td>`;
+        const cls=[colors[ci]?`dem-${colors[ci]}`:'', groupStartSet.has(ci)?'dem-col-gstart':''].filter(Boolean).join(' ');
+        tbody+=`<td${cls?` class="${cls}"`:''} >${v!==null?v:'—'}</td>`;
       });
-      const tcls=colors[colVals.length]?` class="dem-${colors[colVals.length]}"`:''
-      tbody+=`<td${tcls} style="font-weight:600">${totalVal!==null?totalVal:'—'}</td></tr>`;
+      tbody+=`<td class="dem-total">${totalVal!==null?totalVal:'—'}</td></tr>`;
     });
 
     // Summary metrics
@@ -7264,11 +7269,10 @@ function rcpGenerate() {
       const colors  = colVals.map(()=>'').concat(['']); // no color coding per cell
       tbody+=`<tr class="${mr.cls}"><td colspan="2" style="text-align:left;padding-left:10px;font-style:italic">${mr.label}</td>`;
       colVals.forEach((v,ci)=>{
-        const cls=colors[ci]?` class="dem-${colors[ci]}"`:''
-        tbody+=`<td${cls}>${mr.fmt(v)}</td>`;
+        const cls=[colors[ci]?`dem-${colors[ci]}`:'', groupStartSet.has(ci)?'dem-col-gstart':''].filter(Boolean).join(' ');
+        tbody+=`<td${cls?` class="${cls}"`:''} >${mr.fmt(v)}</td>`;
       });
-      const tcls=colors[colVals.length]?` class="dem-${colors[colVals.length]}"`:''
-      tbody+=`<td${tcls} style="font-weight:600">${mr.fmt(totalVal)}</td></tr>`;
+      tbody+=`<td class="dem-total">${mr.fmt(totalVal)}</td></tr>`;
     }
 
     const tableHTML=`
@@ -7277,11 +7281,15 @@ function rcpGenerate() {
       #dem-table th,#dem-table td{padding:5px 8px;border:1px solid #e8e4df;text-align:center;white-space:nowrap}
       #dem-table th{color:#fff;background:#1B5E88;font-weight:600}
       #dem-table th.dem-group{background:#134a6e;font-size:10px;letter-spacing:1px;text-transform:uppercase}
-      #dem-table .row-recurso td:not(:first-child){background:#E8EFF8}
-      #dem-table .row-demanda td:not(:first-child){background:#FBE9E7}
-      #dem-table .row-eng td:not(:first-child){background:#E8F5E9}
-      #dem-table .row-ago td:not(:first-child){background:#FCE4EC}
+      #dem-table .row-recurso td{background:#E8EFF8}
+      #dem-table .row-demanda td{background:#FBE9E7}
+      #dem-table .row-eng td{background:#E8F5E9}
+      #dem-table .row-ago td{background:#FCE4EC}
       #dem-table .row-n td{font-weight:700;background:#f0ede8}
+      #dem-table .dem-col-gstart{border-left:3px solid #1B5E88!important}
+      #dem-table th.dem-col-gstart{border-left:3px solid #0d3a5e!important}
+      #dem-table .dem-total{border-left:3px solid #888!important;font-weight:600}
+      #dem-table th.dem-total-hdr{border-left:3px solid #555!important}
     </style>
     <table id="dem-table">
       <thead>
