@@ -1132,6 +1132,7 @@ tr:hover td { background: var(--bg); }
                 <div id="rcp-canvas-inner" style="position:relative;min-height:460px">
                   <canvas id="rcp-canvas" style="min-height:460px"></canvas>
                 </div>
+                <div id="rcp-table-wrap" style="display:none;width:100%;overflow-x:auto;padding-bottom:12px"></div>
               </div>
             </div>
           </div>
@@ -4916,14 +4917,12 @@ const RCP_DEFS = [
   {
     id: 'demograficos',
     nombre: 'Resultados Demográficos',
-    desc: 'Barras horizontales de Engagement y Agotamiento por género, generación y antigüedad',
+    desc: 'Tabla resumen de dimensiones JDR por Género, Antigüedad y Generación',
     icono: '👥',
-    tipo: 'bar_demo',
+    tipo: 'table',
     requiere: ['WORK_ENGAGEMENT','EXHAUSTION'],
     params: [
-      { id:'med',  tipo:'med_single',   label:'Medición a mostrar' },
-      { id:'sort', tipo:'sort_bar',     label:'Ordenar por' },
-      { id:'scale',tipo:'scale_minmax', label:'Escala del eje valor' }
+      { id:'med', tipo:'med_single', label:'Medición a mostrar' },
     ]
   },
 ];
@@ -5845,6 +5844,11 @@ function rcpGenerate() {
   const rcpCanvas = document.getElementById('rcp-canvas');
   if (rcpCanvas) rcpCanvas.removeEventListener('click', rcpNativeCanvasClick);
   if (!rcpCanvas) { console.error('rcp-canvas not found'); return; }
+  // Reset table/chart visibility
+  const rcpTableWrap = document.getElementById('rcp-table-wrap');
+  const rcpCanvasInner = document.getElementById('rcp-canvas-inner');
+  if(rcpTableWrap){ rcpTableWrap.style.display='none'; rcpTableWrap.innerHTML=''; }
+  if(rcpCanvasInner) rcpCanvasInner.style.display='';
   const ctx = rcpCanvas.getContext('2d');
 
   // ── RECURSOS Y DEMANDAS ──────────────────────────────────────────────────
@@ -7110,54 +7114,196 @@ function rcpGenerate() {
     if(toolsElOC) { toolsElOC.style.display='none'; toolsElOC.innerHTML=''; }
 
   } else if(def.id==='demograficos') {
-    const med=rcpGetParam('med');
-    const sortDem = rcpGetParam('sort') || 'default';
-    const medRows=rcpRowsByMed(med);
-    const demoFields=[
-      {label:'Género',     col:RCP.headers.find(h=>rcpNorm(h).includes('genero'))},
-      {label:'Generación', col:RCP.headers.find(h=>rcpNorm(h).includes('edad')||rcpNorm(h).includes('generacion'))},
-      {label:'Antigüedad', col:RCP.headers.find(h=>rcpNorm(h).includes('antiguedad_rango'))},
-    ].filter(d=>d.col);
-    let demItems=[];
-    demoFields.forEach(field=>{
-      const idx=RCP.headers.indexOf(field.col);
-      const grps=[...new Set(medRows.map(r=>String(r[idx]||'').trim()).filter(Boolean))].sort();
-      grps.forEach(g=>{
-        const rows=medRows.filter(r=>String(r[idx]||'').trim()===g);
-        demItems.push({label:field.label+': '+g, val:rcpMean(rows,'WORK_ENGAGEMENT')||0,
-          n:rows.length, eng:rcpMean(rows,'WORK_ENGAGEMENT'), ago:rcpMean(rows,'EXHAUSTION')});
-      });
-    });
-    demItems = rcpSortBar(demItems, sortDem);
-    const labelsD=demItems.map(x=>x.label);
-    const ds=[
-      {label:'Engagement', data:demItems.map(x=>x.eng), backgroundColor:RCP_COLORS.engagement.bg, borderColor:RCP_COLORS.engagement.border, borderWidth:1.5},
-      {label:'Agotamiento', data:demItems.map(x=>x.ago), backgroundColor:RCP_COLORS.agotamiento.bg, borderColor:RCP_COLORS.agotamiento.border, borderWidth:1.5},
+    const med = rcpGetParam('med') || (RCP.mediciones[RCP.mediciones.length-1]);
+    const medRows = rcpRowsByMed(med);
+
+    // ── Dimension rows (same order as Recursos y Demandas) ────────────────
+    const DEM_ORDER = [
+      'OPPORTUNITIES_FOR_DEVELOPMENT','COACH','FEEDBACK','SOCIAL_SUPPORT','AUTONOMY',
+      'OPTIMISM','SELF_EFFICACY',
+      'WORK_PRESSURE','COGNITIVE_DEMANDS','EMOTIONAL_DEMANDS','ROLE_CONFLICT','HASSLES'
     ];
-    const scaleDMin = parseFloat(document.getElementById('rcp_scale_min')?.value ?? '1') || 1;
-    const scaleDMax = parseFloat(document.getElementById('rcp_scale_max')?.value ?? '6') || 6;
-    chartCfg = rcpBarChart(labelsD, ds, def.nombre+' — '+med, true, {min:scaleDMin, max:scaleDMax});
-    RCP._chartState = {
-      horizontal: true,
-      allLabels: labelsD,
-      allData: [demItems.map(x=>x.eng), demItems.map(x=>x.ago)],
-      benchVals: [], numMain: 2, allN: demItems.map(x=>x.n),
-      hiddenLabels: new Set(), currentLabels: labelsD.slice(),
-    };
-    chartCfg.options.onClick = (event, elements, chart) => {
-      const state = RCP._chartState; if (!state) return;
-      const ex = event.native ? event.native.offsetX : (event.offsetX ?? event.x);
-      const ey = event.native ? event.native.offsetY : (event.offsetY ?? event.y);
-      const scaleY = chart.scales.y; if (!scaleY || (chart.chartArea && ex >= chart.chartArea.left)) return;
-      let closest=-1, minDist=Infinity;
-      scaleY.ticks.forEach((tick,i)=>{const py=scaleY.getPixelForTick(i),d=Math.abs(py-ey);if(d<minDist){minDist=d;closest=i;}});
-      if(closest<0||minDist>28) return;
-      const lbl=state.currentLabels?.[closest]; if(!lbl) return;
-      if(state.hiddenLabels.has(lbl)) state.hiddenLabels.delete(lbl); else state.hiddenLabels.add(lbl);
-      rcpChartRefresh();
-    };
+    const demDims = ALL_DIMS
+      .filter(d => d.tipo==='recurso' || d.tipo==='demanda')
+      .sort((a,b)=>{ const ia=DEM_ORDER.indexOf(a.col),ib=DEM_ORDER.indexOf(b.col); return (ia<0?999:ia)-(ib<0?999:ib); });
+
+    // ── Binary flag columns ───────────────────────────────────────────────
+    const engBinIdx  = rcpColIdxFuzzy('VIGOR_BINARY');
+    const agoBinIdx  = (()=>{ const i=rcpColIdxFuzzy('EXHAUSTED_BYNARY'); return i>=0?i:RCP.headers.findIndex(h=>rcpNorm(h).includes('altoagot')||rcpNorm(h)==='altoagot'); })();
+    const engMedIdx  = rcpColIdxFuzzy('WORK_ENGAGEMENT');
+    const agoMedIdx  = rcpColIdxFuzzy('EXHAUSTION');
+
+    // ── Detect demographic column groups ──────────────────────────────────
+    const demGroupDefs = [
+      { id:'genero',    label:'GÉNERO',
+        match: h => rcpNorm(h)==='genero',
+        sort: null },
+      { id:'antiguedad', label:'ANTIGÜEDAD',
+        match: h => rcpNorm(h).startsWith('antiguedad'),
+        sort: (a,b) => {
+          if(a.toLowerCase().includes('menos')) return -1;
+          if(b.toLowerCase().includes('menos')) return 1;
+          const na=parseInt(a.match(/\d+/)?.[0]??'999'), nb=parseInt(b.match(/\d+/)?.[0]??'999');
+          return na-nb;
+        }},
+      { id:'generacion', label:'GENERACIÓN',
+        match: h => rcpNorm(h).includes('catnacimiento')||rcpNorm(h).includes('catedad')||rcpNorm(h).includes('generacion'),
+        sort: (a,b) => {
+          const ya=parseInt(a.match(/\d{4}/)?.[0]??(a.toLowerCase().includes('antes')?'1900':'9999'));
+          const yb=parseInt(b.match(/\d{4}/)?.[0]??(b.toLowerCase().includes('antes')?'1900':'9999'));
+          return ya-yb;
+        }},
+    ];
+
+    const demGroups = [];
+    for(const gd of demGroupDefs) {
+      const col = RCP.headers.find(h => gd.match(h));
+      if(!col) continue;
+      const colIdx = RCP.headers.indexOf(col);
+      let vals = [...new Set(medRows.map(r=>String(r[colIdx]||'').trim()).filter(Boolean))];
+      if(gd.sort) vals.sort(gd.sort); else vals.sort();
+      if(vals.length) demGroups.push({...gd, col, colIdx, vals});
+    }
+    if(!demGroups.length){ alert('No se encontraron columnas demográficas.'); return; }
+
+    // ── Compute metrics for a row subset ──────────────────────────────────
+    function demRowMetrics(rows) {
+      if(!rows.length) return null;
+      const dimVals = demDims.map(d=>{ const v=rcpMean(rows,d.col); return v!==null?+v.toFixed(2):null; });
+      const eVals = rows.map(r=>parseFloat(r[engMedIdx])).filter(v=>!isNaN(v));
+      const aVals = rows.map(r=>parseFloat(r[agoMedIdx])).filter(v=>!isNaN(v));
+      const engMean = eVals.length ? +(eVals.reduce((s,v)=>s+v)/eVals.length).toFixed(2) : null;
+      const agoMean = aVals.length ? +(aVals.reduce((s,v)=>s+v)/aVals.length).toFixed(2) : null;
+      const altoEng = engBinIdx>=0 ? rows.filter(r=>parseFloat(r[engBinIdx])===1).length : null;
+      const altoAgo = agoBinIdx>=0 ? rows.filter(r=>parseFloat(r[agoBinIdx])===1).length : null;
+      return {
+        dimVals,
+        engMean, agoMean,
+        pctAltoEng: altoEng!==null ? Math.round(altoEng/rows.length*100) : null,
+        pctAltoAgo: altoAgo!==null ? Math.round(altoAgo/rows.length*100) : null,
+        n: rows.length
+      };
+    }
+
+    // ── Build column data ─────────────────────────────────────────────────
+    const allCols = []; // {groupId, groupLabel, val, rows}
+    for(const g of demGroups) {
+      for(const v of g.vals) {
+        const rows = medRows.filter(r=>String(r[g.colIdx]||'').trim()===v);
+        allCols.push({groupId:g.id, groupLabel:g.label, val:v, rows, metrics:demRowMetrics(rows)});
+      }
+    }
+    const totalMetrics = demRowMetrics(medRows);
+
+    // ── Color coding helper ───────────────────────────────────────────────
+    // higherIsBetter=true: red=min, blue=max; false: red=max, blue=min
+    function colorCells(vals, higherIsBetter) {
+      const numbers = vals.map(v=>v!==null&&v!==undefined&&v!==''?parseFloat(v):NaN).filter(v=>!isNaN(v));
+      if(!numbers.length) return vals.map(()=>'');
+      const mn=Math.min(...numbers), mx=Math.max(...numbers);
+      if(mn===mx) return vals.map(()=>'');
+      return vals.map(v=>{
+        if(v===null||v===undefined||v==='') return '';
+        const n=parseFloat(v);
+        if(isNaN(n)) return '';
+        if(higherIsBetter){ if(n===mn) return 'worst'; if(n===mx) return 'best'; }
+        else              { if(n===mx) return 'worst'; if(n===mn) return 'best'; }
+        return '';
+      });
+    }
+
+    // ── Build HTML ────────────────────────────────────────────────────────
+    const groupSpans = demGroups.map(g=>({label:g.label, span:g.vals.length}));
+
+    // thead row 1: group headers
+    let theadR1 = `<th rowspan="2" style="text-align:left;min-width:160px">Valores</th>`;
+    for(const gs of groupSpans) theadR1+=`<th colspan="${gs.span}" class="dem-group">${gs.label}</th>`;
+    theadR1+=`<th rowspan="2">Total general</th>`;
+
+    // thead row 2: individual column headers
+    let theadR2='';
+    for(const g of demGroups) for(const v of g.vals) theadR2+=`<th>${v}</th>`;
+
+    // tbody rows
+    let tbody='';
+    const recursoCount = demDims.filter(d=>d.tipo==='recurso').length;
+    const demandaCount = demDims.filter(d=>d.tipo==='demanda').length;
+
+    demDims.forEach((dim,di)=>{
+      const rowClass = dim.tipo==='recurso'?'row-recurso':'row-demanda';
+      const hisBetter = dim.tipo==='recurso'; // recursos: higher=better; demandas: lower=better
+      const colVals = allCols.map(c=>c.metrics?.dimVals[di]??null);
+      const totalVal = totalMetrics?.dimVals[di]??null;
+      const colors = colorCells([...colVals, totalVal], hisBetter);
+
+      // Vertical label for first row of each group
+      let firstCell='';
+      if(di===0) firstCell=`<td rowspan="${recursoCount}" style="background:#1B3F6E;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;writing-mode:vertical-rl;text-orientation:mixed;text-align:center;padding:4px 3px;width:20px">RECURSOS</td>`;
+      else if(di===recursoCount) firstCell=`<td rowspan="${demandaCount}" style="background:#8D4A00;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px;writing-mode:vertical-rl;text-orientation:mixed;text-align:center;padding:4px 3px;width:20px">DEMANDAS</td>`;
+
+      tbody+=`<tr class="${rowClass}">${firstCell}<td style="text-align:left;padding-left:10px">${dim.label}</td>`;
+      colVals.forEach((v,ci)=>{
+        const cls=colors[ci]?` class="dem-${colors[ci]}"`:''
+        tbody+=`<td${cls}>${v!==null?v:'—'}</td>`;
+      });
+      const tcls=colors[colVals.length]?` class="dem-${colors[colVals.length]}"`:''
+      tbody+=`<td${tcls} style="font-weight:600">${totalVal!==null?totalVal:'—'}</td></tr>`;
+    });
+
+    // Summary metrics
+    const metricRows=[
+      {label:'Promedio Engagement',          cls:'row-eng',  vals:c=>c.metrics?.engMean,     total:totalMetrics?.engMean,     hi:true,  fmt:v=>v!==null?v:'—'},
+      {label:'Personas con alto Engagement', cls:'row-eng',  vals:c=>c.metrics?.pctAltoEng,  total:totalMetrics?.pctAltoEng,  hi:true,  fmt:v=>v!==null?v+'%':'—'},
+      {label:'Promedio Agotamiento',         cls:'row-ago',  vals:c=>c.metrics?.agoMean,     total:totalMetrics?.agoMean,     hi:false, fmt:v=>v!==null?v:'—'},
+      {label:'Personas con alto Agotamiento',cls:'row-ago',  vals:c=>c.metrics?.pctAltoAgo,  total:totalMetrics?.pctAltoAgo,  hi:false, fmt:v=>v!==null?v+'%':'—'},
+      {label:'N',                            cls:'row-n',    vals:c=>c.metrics?.n,            total:totalMetrics?.n,           hi:null,  fmt:v=>v!==null?v:'—'},
+    ];
+    for(const mr of metricRows){
+      const colVals = allCols.map(c=>mr.vals(c));
+      const totalVal= mr.total;
+      const colors  = mr.hi!==null ? colorCells([...colVals,totalVal], mr.hi) : colVals.map(()=>'');
+      tbody+=`<tr class="${mr.cls}"><td colspan="2" style="text-align:left;padding-left:10px;font-style:italic">${mr.label}</td>`;
+      colVals.forEach((v,ci)=>{
+        const cls=colors[ci]?` class="dem-${colors[ci]}"`:''
+        tbody+=`<td${cls}>${mr.fmt(v)}</td>`;
+      });
+      const tcls=colors[colVals.length]?` class="dem-${colors[colVals.length]}"`:''
+      tbody+=`<td${tcls} style="font-weight:600">${mr.fmt(totalVal)}</td></tr>`;
+    }
+
+    const tableHTML=`
+    <style>
+      #dem-table{border-collapse:collapse;font-size:12px;font-family:"DM Sans",sans-serif;width:100%}
+      #dem-table th,#dem-table td{padding:5px 8px;border:1px solid #e8e4df;text-align:center;white-space:nowrap}
+      #dem-table th{color:#fff;background:#1B5E88;font-weight:600}
+      #dem-table th.dem-group{background:#134a6e;font-size:10px;letter-spacing:1px;text-transform:uppercase}
+      #dem-table .row-recurso td:not(:first-child){background:#EBF3FA}
+      #dem-table .row-demanda td:not(:first-child){background:#FFF3E0}
+      #dem-table .row-eng td:not(:first-child){background:#E3F2FD}
+      #dem-table .row-ago td:not(:first-child){background:#FFF8E1}
+      #dem-table .row-n td{font-weight:700;background:#f0ede8}
+      #dem-table .dem-worst{background:#FFCDD2!important;font-weight:700;color:#B71C1C}
+      #dem-table .dem-best{background:#BBDEFB!important;font-weight:700;color:#0D47A1}
+    </style>
+    <table id="dem-table">
+      <thead>
+        <tr>${theadR1}</tr>
+        <tr>${theadR2}</tr>
+      </thead>
+      <tbody>${tbody}</tbody>
+    </table>`;
+
+    document.getElementById('rcp-table-wrap').innerHTML = tableHTML;
+    document.getElementById('rcp-table-wrap').style.display = 'block';
+    document.getElementById('rcp-canvas-inner').style.display = 'none';
+
+    document.getElementById('rcp-preview-lbl').textContent = def.nombre + ' — ' + med;
+    document.getElementById('rcp-preview-wrap').style.display = 'block';
+    document.getElementById('rcp-preview-wrap').scrollIntoView({behavior:'smooth'});
     const toolsElDem = document.getElementById('rcp-enps-tools');
-    if (toolsElDem) { toolsElDem.style.display='none'; toolsElDem.innerHTML=''; }
+    if(toolsElDem){ toolsElDem.style.display='none'; toolsElDem.innerHTML=''; }
+    // No chart to render — return early
+    chartCfg = null;
   }
 
   if(!chartCfg) return;
