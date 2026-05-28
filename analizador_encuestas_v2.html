@@ -6414,13 +6414,13 @@ function rcpGenerate() {
         if(engIdx >= 0 && agoIdx >= 0) {
           const eVals = allRows.map(r=>parseFloat(r[engIdx])).filter(v=>!isNaN(v)).sort((a,b)=>a-b);
           const aVals = allRows.map(r=>parseFloat(r[agoIdx])).filter(v=>!isNaN(v)).sort((a,b)=>a-b);
-          const p60e=eVals[Math.floor(eVals.length*0.60)], p40e=eVals[Math.floor(eVals.length*0.40)];
-          const p40a=aVals[Math.floor(aVals.length*0.40)], p60a=aVals[Math.floor(aVals.length*0.60)];
+          const p75e=eVals[Math.floor(eVals.length*0.75)], p25e=eVals[Math.floor(eVals.length*0.25)];
+          const p25a=aVals[Math.floor(aVals.length*0.25)], p75a=aVals[Math.floor(aVals.length*0.75)];
           if(isOpt) {
-            lineRows = allRows.filter(r=>parseFloat(r[engIdx])>=p60e && parseFloat(r[agoIdx])<=p40a);
+            lineRows = allRows.filter(r=>parseFloat(r[engIdx])>=p75e && parseFloat(r[agoIdx])<=p25a);
             lineLabel = 'Óptimo org: '+lineMed;
           } else {
-            lineRows = allRows.filter(r=>parseFloat(r[engIdx])<=p40e && parseFloat(r[agoIdx])>=p60a);
+            lineRows = allRows.filter(r=>parseFloat(r[engIdx])<=p25e && parseFloat(r[agoIdx])>=p75a);
             lineLabel = 'Crítico org: '+lineMed;
           }
         }
@@ -6984,13 +6984,13 @@ function rcpGenerate() {
     // Percentile thresholds on the filtered population
     const eVals = baseRows.map(r=>parseFloat(r[engIdx])).filter(v=>!isNaN(v)).sort((a,b)=>a-b);
     const aVals = baseRows.map(r=>parseFloat(r[agoIdx])).filter(v=>!isNaN(v)).sort((a,b)=>a-b);
-    const p60e = eVals[Math.floor(eVals.length*0.60)];
-    const p40e = eVals[Math.floor(eVals.length*0.40)];
-    const p40a = aVals[Math.floor(aVals.length*0.40)];
-    const p60a = aVals[Math.floor(aVals.length*0.60)];
+    const p75e = eVals[Math.floor(eVals.length*0.75)];
+    const p25e = eVals[Math.floor(eVals.length*0.25)];
+    const p25a = aVals[Math.floor(aVals.length*0.25)];
+    const p75a = aVals[Math.floor(aVals.length*0.75)];
 
-    const optimoRows  = baseRows.filter(r => parseFloat(r[engIdx])>=p60e && parseFloat(r[agoIdx])<=p40a);
-    const criticoRows = baseRows.filter(r => parseFloat(r[engIdx])<=p40e && parseFloat(r[agoIdx])>=p60a);
+    const optimoRows  = baseRows.filter(r => parseFloat(r[engIdx])>=p75e && parseFloat(r[agoIdx])<=p25a);
+    const criticoRows = baseRows.filter(r => parseFloat(r[engIdx])<=p25e && parseFloat(r[agoIdx])>=p75a);
 
     // Same dimension set and order as Recursos y Demandas
     const OC_ORDER = [
