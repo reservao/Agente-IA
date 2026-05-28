@@ -7215,8 +7215,8 @@ function rcpGenerate() {
     // ── Build HTML ────────────────────────────────────────────────────────
     const groupSpans = demGroups.map(g=>({label:g.label, span:g.vals.length}));
 
-    // thead row 1: group headers
-    let theadR1 = `<th rowspan="2" style="text-align:left;min-width:160px">Valores</th>`;
+    // thead row 1: group headers — colspan=2 covers vertical-label + dim-name columns
+    let theadR1 = `<th colspan="2" rowspan="2" style="text-align:left;min-width:160px">Valores</th>`;
     for(const gs of groupSpans) theadR1+=`<th colspan="${gs.span}" class="dem-group">${gs.label}</th>`;
     theadR1+=`<th rowspan="2">Total general</th>`;
 
@@ -7234,7 +7234,7 @@ function rcpGenerate() {
       const hisBetter = dim.tipo==='recurso'; // recursos: higher=better; demandas: lower=better
       const colVals = allCols.map(c=>c.metrics?.dimVals[di]??null);
       const totalVal = totalMetrics?.dimVals[di]??null;
-      const colors = colorCells([...colVals, totalVal], hisBetter);
+      const colors = colVals.map(()=>'').concat(['']); // no color coding per cell
 
       // Vertical label for first row of each group
       let firstCell='';
@@ -7261,7 +7261,7 @@ function rcpGenerate() {
     for(const mr of metricRows){
       const colVals = allCols.map(c=>mr.vals(c));
       const totalVal= mr.total;
-      const colors  = mr.hi!==null ? colorCells([...colVals,totalVal], mr.hi) : colVals.map(()=>'');
+      const colors  = colVals.map(()=>'').concat(['']); // no color coding per cell
       tbody+=`<tr class="${mr.cls}"><td colspan="2" style="text-align:left;padding-left:10px;font-style:italic">${mr.label}</td>`;
       colVals.forEach((v,ci)=>{
         const cls=colors[ci]?` class="dem-${colors[ci]}"`:''
@@ -7277,13 +7277,11 @@ function rcpGenerate() {
       #dem-table th,#dem-table td{padding:5px 8px;border:1px solid #e8e4df;text-align:center;white-space:nowrap}
       #dem-table th{color:#fff;background:#1B5E88;font-weight:600}
       #dem-table th.dem-group{background:#134a6e;font-size:10px;letter-spacing:1px;text-transform:uppercase}
-      #dem-table .row-recurso td:not(:first-child){background:#EBF3FA}
-      #dem-table .row-demanda td:not(:first-child){background:#FFF3E0}
-      #dem-table .row-eng td:not(:first-child){background:#E3F2FD}
-      #dem-table .row-ago td:not(:first-child){background:#FFF8E1}
+      #dem-table .row-recurso td:not(:first-child){background:#E8EFF8}
+      #dem-table .row-demanda td:not(:first-child){background:#FBE9E7}
+      #dem-table .row-eng td:not(:first-child){background:#E8F5E9}
+      #dem-table .row-ago td:not(:first-child){background:#FCE4EC}
       #dem-table .row-n td{font-weight:700;background:#f0ede8}
-      #dem-table .dem-worst{background:#FFCDD2!important;font-weight:700;color:#B71C1C}
-      #dem-table .dem-best{background:#BBDEFB!important;font-weight:700;color:#0D47A1}
     </style>
     <table id="dem-table">
       <thead>
@@ -7386,7 +7384,30 @@ function rcpSetChartHeight(h) {
   if (RCP._enpsState) { RCP._enpsState.alturaOverride = h; }
 }
 
+function rcpCaptureTablePNG(el) {
+  html2canvas(el, {scale:2, backgroundColor:'#ffffff', useCORS:true}).then(canvas => {
+    const a = document.createElement('a');
+    a.download = (RCP.currentDef?.nombre||'tabla').replace(/[^\w\s-]/g,'') + '.png';
+    a.href = canvas.toDataURL('image/png', 1.0);
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }).catch(()=>alert('No se pudo exportar la tabla como PNG.'));
+}
+
 function rcpDownloadPNG() {
+  // Table mode
+  const tableWrap = document.getElementById('rcp-table-wrap');
+  if(tableWrap && tableWrap.style.display !== 'none') {
+    if(typeof html2canvas !== 'undefined') {
+      rcpCaptureTablePNG(tableWrap);
+    } else {
+      const s = document.createElement('script');
+      s.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
+      s.onload = () => rcpCaptureTablePNG(tableWrap);
+      s.onerror = () => alert('No se pudo cargar html2canvas. Verifica tu conexión a internet.');
+      document.head.appendChild(s);
+    }
+    return;
+  }
   if(!RCP.chart) return;
   const canvas = document.getElementById('rcp-canvas');
   if (!canvas) { alert('No hay gráfico activo.'); return; }
