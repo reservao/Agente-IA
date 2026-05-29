@@ -279,6 +279,8 @@ tr:hover td { background: var(--bg); }
 .td-err { color: var(--err); font-weight: 600; font-family: 'DM Mono', monospace; }
 .td-warn { color: var(--warn); font-weight: 600; font-family: 'DM Mono', monospace; }
 .more-note { font-size: 11px; color: var(--text3); margin-top: 6px; font-style: italic; }
+.empty-summary { display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding:8px 12px; border-radius:var(--radius-sm); border:1px solid var(--warn-border); background:#fdfaf3; }
+.btn-text { background:none; border:none; color:var(--accent); font-size:12px; cursor:pointer; padding:0; text-decoration:underline; margin-left:4px; }
 
 /* DOWNLOAD SECTION */
 .dl-section { margin-top: 1rem; }
@@ -1447,10 +1449,57 @@ function renderRanges() {
     document.getElementById('p2-issues-wrap').style.display = 'block';
     document.getElementById('p2-issues').innerHTML = r.errPregs.map((p, i) => {
       const isErr = p.outRows.length > 0;
-      const allRows = [
-        ...p.outRows.map(x => ({...x, tipo:'Fuera de rango', cls:'td-err'})),
-        ...p.emptyRows.map(x => ({...x, tipo:'Vacío', cls:'td-warn'}))
-      ];
+      // Fuera de rango: siempre fila por fila (son críticos)
+      const outSection = p.outRows.length ? `
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>${r.idCol}</th><th>Columna</th><th>Valor</th><th>Problema</th></tr></thead>
+            <tbody>${p.outRows.slice(0,100).map(x => `<tr>
+              <td class="td-mono">${escHtml(String(x.id))}</td>
+              <td style="color:var(--text2);font-size:11px">${escHtml(p.col)}</td>
+              <td class="td-err">${x.val}</td>
+              <td><span class="badge err">Fuera de rango</span></td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </div>
+        ${p.outRows.length > 100 ? `<p class="more-note">Mostrando 100 de ${p.outRows.length} registros fuera de rango</p>` : ''}
+      ` : '';
+      // Vacíos: resumen compacto cuando son muchos (>5), lista expandible bajo demanda
+      const MT = p.outRows.length ? 'margin-top:.5rem;' : '';
+      const emptySection = !p.emptyRows.length ? '' :
+        p.emptyRows.length <= 5 ? `
+          <div class="tbl-wrap" style="${MT}">
+            <table>
+              <thead><tr><th>${r.idCol}</th><th>Columna</th><th>Valor</th><th>Problema</th></tr></thead>
+              <tbody>${p.emptyRows.map(x => `<tr>
+                <td class="td-mono">${escHtml(String(x.id))}</td>
+                <td style="color:var(--text2);font-size:11px">${escHtml(p.col)}</td>
+                <td class="td-warn">(vacío)</td>
+                <td><span class="badge warn">Vacío</span></td>
+              </tr>`).join('')}</tbody>
+            </table>
+          </div>
+        ` : `
+          <div class="empty-summary" style="${MT}">
+            <span class="badge warn">${p.emptyRows.length} vacíos</span>
+            <span style="color:var(--text2);font-size:12px">${p.emptyRows.length} persona${p.emptyRows.length>1?'s':''} sin respuesta en esta pregunta</span>
+            <button class="btn-text" onclick="event.stopPropagation();togEmptyDetail('ev${i}',this)">ver lista ▾</button>
+          </div>
+          <div id="ev${i}" style="display:none;margin-top:6px">
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr><th>${r.idCol}</th><th>Columna</th><th>Valor</th><th>Problema</th></tr></thead>
+                <tbody>${p.emptyRows.slice(0,200).map(x => `<tr>
+                  <td class="td-mono">${escHtml(String(x.id))}</td>
+                  <td style="color:var(--text2);font-size:11px">${escHtml(p.col)}</td>
+                  <td class="td-warn">(vacío)</td>
+                  <td><span class="badge warn">Vacío</span></td>
+                </tr>`).join('')}</tbody>
+              </table>
+            </div>
+            ${p.emptyRows.length > 200 ? `<p class="more-note">Mostrando 200 de ${p.emptyRows.length} registros</p>` : ''}
+          </div>
+        `;
       return `<div class="issue-item ${isErr ? 'is-err' : 'is-warn'}">
         <div class="issue-header" onclick="tog('rd${i}','ra${i}')">
           <div class="issue-header-left">
@@ -1464,18 +1513,7 @@ function renderRanges() {
           </div>
         </div>
         <div class="issue-detail" id="rd${i}">
-          <div class="tbl-wrap">
-            <table>
-              <thead><tr><th>${r.idCol}</th><th>Columna</th><th>Valor</th><th>Problema</th></tr></thead>
-              <tbody>${allRows.slice(0,100).map(x => `<tr>
-                <td class="td-mono">${x.id}</td>
-                <td style="color:var(--text2);font-size:11px">${p.col}</td>
-                <td class="${x.cls}">${x.val}</td>
-                <td><span class="badge ${x.tipo==='Fuera de rango'?'err':'warn'}">${x.tipo}</span></td>
-              </tr>`).join('')}</tbody>
-            </table>
-          </div>
-          ${allRows.length > 100 ? `<p class="more-note">Mostrando 100 de ${allRows.length} registros</p>` : ''}
+          ${outSection}${emptySection}
         </div>
       </div>`;
     }).join('');
@@ -1638,6 +1676,13 @@ function tog(elId, arId) {
   const open = el.style.display === 'block';
   el.style.display = open ? 'none' : 'block';
   if (ar) { ar.textContent = open ? '▾' : '▴'; ar.classList.toggle('open', !open); }
+}
+function togEmptyDetail(elId, btn) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  btn.textContent = open ? 'ver lista ▾' : 'ocultar lista ▴';
 }
 
 function process(wb, filename) {
