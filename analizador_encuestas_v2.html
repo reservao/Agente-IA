@@ -3181,8 +3181,14 @@ function s1DownloadOrgPDF() {
 
   const svgStr = new XMLSerializer().serializeToString(clone);
 
-  const SCALE  = 2;
   const totalW = LEG_W + outW;
+  // Chrome canvas hard limit per dimension (~32767px). Use SCALE=2 for quality when
+  // the output fits; fall back to SCALE=1 for very wide trees to avoid canvas clipping.
+  const CHROME_MAX = 32767;
+  const SCALE = Math.max(1, Math.min(2,
+    Math.floor(CHROME_MAX / totalW),
+    Math.floor(CHROME_MAX / Math.max(outH, 1))
+  ));
   const img = new Image();
 
   const svgBlob = new Blob([svgStr], {type: 'image/svg+xml;charset=utf-8'});
@@ -3192,7 +3198,7 @@ function s1DownloadOrgPDF() {
   const timeoutId = setTimeout(() => {
     URL.revokeObjectURL(blobUrl);
     if (btn) { btn.textContent = '⬇ Descargar PNG'; btn.disabled = false; }
-    alert('Tiempo de espera agotado. El organigrama es muy grande para PNG — usa el botón Descargar SVG.');
+    alert('Tiempo de espera agotado. El organigrama puede ser demasiado grande para generar como PNG.');
   }, 15000);
 
   img.onload = () => {
@@ -3203,6 +3209,8 @@ function s1DownloadOrgPDF() {
       canvas.width  = totalW * SCALE;
       canvas.height = outH * SCALE;
       const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.scale(SCALE, SCALE);
