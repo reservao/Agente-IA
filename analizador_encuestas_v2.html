@@ -3099,7 +3099,7 @@ function s1DownloadOrgPDF() {
 
   // Cap the SVG's declared pixel dimensions to avoid Chrome's rasterization limit.
   // viewBox shows full content regardless of declared size.
-  const MAX_SIDE = 8000;
+  const MAX_SIDE = 32000;
   const capScale = Math.min(1, MAX_SIDE / fullW, MAX_SIDE / fullH);
   const outW = Math.max(1, Math.round(fullW * capScale));
   const outH = Math.max(1, Math.round(fullH * capScale));
