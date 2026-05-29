@@ -286,13 +286,14 @@ tr:hover td { background: var(--bg); }
 .btn-text { background:none; border:none; color:var(--accent); font-size:12px; cursor:pointer; padding:0; text-decoration:underline; margin-left:4px; }
 
 /* ONE PAGE */
-.rop-chart-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
+.rop-chart-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:14px; }
 .rop-chart-title { font-size:13px; font-weight:700; color:var(--text1); margin-bottom:8px; letter-spacing:.02em; text-transform:uppercase; }
-.rop-org-ref { font-size:11px; color:var(--text3); margin-top:6px; padding:4px 8px; background:var(--bg2); border-radius:4px; }
-.rop-metric-row { display:flex; gap:1.5rem; align-items:baseline; margin-bottom:10px; flex-wrap:wrap; }
-.rop-metric { display:flex; flex-direction:column; align-items:center; }
-.rop-metric-val { font-size:22px; font-weight:800; color:var(--accent); line-height:1; }
-.rop-metric-lbl { font-size:10px; color:var(--text3); margin-top:2px; text-align:center; }
+.rop-rd-header { background:#222; color:#fff; font-size:12px; font-weight:700; letter-spacing:.06em; text-align:center; padding:7px 14px; margin:-14px -14px 0; border-radius:var(--radius) var(--radius) 0 0; }
+.rop-axis-label { writing-mode:vertical-rl; transform:rotate(180deg); font-size:9px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; display:flex; align-items:center; justify-content:center; min-width:14px; }
+.rop-summary-row { margin-top:10px; padding:7px 10px; background:#f8f8f8; border-radius:6px; display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; font-size:11px; color:var(--text2); border-top:1px solid var(--border); }
+.rop-sum-label { font-weight:700; color:var(--text1); }
+.rop-sum-val { font-size:15px; font-weight:800; color:var(--accent); }
+.rop-sum-pct { font-size:15px; font-weight:800; color:var(--ok); }
 
 /* DOWNLOAD SECTION */
 .dl-section { margin-top: 1rem; }
@@ -1304,32 +1305,41 @@ tr:hover td { background: var(--bg); }
           <button class="btn btn-secondary" style="font-size:12px" onclick="ropDownloadPNG()">⬇ Descargar PNG</button>
         </div>
         <!-- Contenedor capturable -->
-        <div id="rop-canvas-wrap" style="background:#fff;padding:24px;border-radius:var(--radius);border:1px solid var(--border)">
-          <!-- Fila 1: Engagement (izq grande) + Agotamiento (der grande) -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem">
-            <div class="rop-chart-card">
-              <div class="rop-chart-title">Engagement</div>
-              <div class="rop-metric-row" id="rop-met-eng" style="display:none"></div>
-              <canvas id="rop-chart-eng" height="200"></canvas>
-              <div class="rop-org-ref" id="rop-org-eng" style="display:none"></div>
+        <div id="rop-canvas-wrap" style="background:#fff;padding:24px 24px 32px;border-radius:var(--radius);border:1px solid var(--border)">
+          <!-- Título segmento -->
+          <div id="rop-seg-title" style="font-size:17px;font-weight:800;color:var(--accent);margin-bottom:18px"></div>
+          <!-- 2 columnas: izq=Eng+Agot | der=R&D+eNPS -->
+          <div style="display:grid;grid-template-columns:35fr 65fr;gap:20px;align-items:start">
+            <!-- COLUMNA IZQUIERDA -->
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <!-- Engagement -->
+              <div class="rop-chart-card">
+                <div style="display:flex;gap:4px;align-items:stretch">
+                  <div class="rop-axis-label">ENGAGEMENT-SENTIDO PERTENENCIA</div>
+                  <div style="flex:1"><canvas id="rop-chart-eng" height="165"></canvas></div>
+                </div>
+                <div class="rop-summary-row" id="rop-sum-eng" style="display:none"></div>
+              </div>
+              <!-- Agotamiento -->
+              <div class="rop-chart-card">
+                <div style="display:flex;gap:4px;align-items:stretch">
+                  <div class="rop-axis-label">AGOTAMIENTO</div>
+                  <div style="flex:1"><canvas id="rop-chart-agot" height="165"></canvas></div>
+                </div>
+                <div class="rop-summary-row" id="rop-sum-agot" style="display:none"></div>
+              </div>
             </div>
-            <div class="rop-chart-card">
-              <div class="rop-chart-title">Agotamiento</div>
-              <div class="rop-metric-row" id="rop-met-agot" style="display:none"></div>
-              <canvas id="rop-chart-agot" height="200"></canvas>
-              <div class="rop-org-ref" id="rop-org-agot" style="display:none"></div>
-            </div>
-          </div>
-          <!-- Fila 2: Recursos & Demandas (izq ancho) + eNPS (der) -->
-          <div style="display:grid;grid-template-columns:3fr 2fr;gap:1.5rem">
-            <div class="rop-chart-card">
-              <div class="rop-chart-title">Recursos &amp; Demandas</div>
-              <canvas id="rop-chart-rd" height="260"></canvas>
-            </div>
-            <div class="rop-chart-card">
-              <div class="rop-chart-title">eNPS</div>
-              <div class="rop-metric-row" id="rop-met-enps" style="display:none"></div>
-              <canvas id="rop-chart-enps" height="240"></canvas>
+            <!-- COLUMNA DERECHA -->
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <!-- Recursos & Demandas -->
+              <div class="rop-chart-card" style="padding-top:0">
+                <div class="rop-rd-header">RECURSOS Y DEMANDAS</div>
+                <canvas id="rop-chart-rd" height="210" style="margin-top:10px"></canvas>
+              </div>
+              <!-- eNPS -->
+              <div class="rop-chart-card" style="padding-right:56px">
+                <canvas id="rop-chart-enps" height="110"></canvas>
+              </div>
             </div>
           </div>
         </div>
@@ -8403,17 +8413,118 @@ function ropGenerate() {
 
   const label = segmento || 'Toda la organización';
   document.getElementById('rop-title-bar').textContent = `${label} — ${medicion}${comp ? ' vs. '+comp : ''}`;
+  document.getElementById('rop-seg-title').textContent = label;
 
   // Destroy old charts
   Object.keys(ROP.charts).forEach(k => { if (ROP.charts[k]) { ROP.charts[k].destroy(); ROP.charts[k]=null; } });
 
   ropRenderEng(rows, orgRows, compRows, medicion, comp, showOrg);
   ropRenderAgot(rows, orgRows, compRows, medicion, comp, showOrg);
-  ropRenderRD(rows, compRows, medicion, comp);
+  ropRenderRD(rows, orgRows, compRows, medicion, comp);
   ropRenderENPS(rows, compRows, medicion, comp);
 
   document.getElementById('rop-preview').style.display = 'block';
   document.getElementById('rop-preview').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+// ── Inline Chart.js plugins ───────────────────────────────────────────────
+// Draws value labels on top of vertical bars
+const ropValLabelPlugin = {
+  id:'ropValLabel',
+  afterDatasetsDraw(chart) {
+    if (!chart.config.options._valLabels) return;
+    const {ctx} = chart;
+    chart.data.datasets.forEach((ds, di) => {
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden || meta.type === 'line') return;
+      meta.data.forEach((bar, i) => {
+        const v = ds.data[i];
+        if (v == null || isNaN(v)) return;
+        ctx.save();
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 10px Inter,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(Number(v).toFixed(2), bar.x, bar.y - 2);
+        ctx.restore();
+      });
+    });
+  }
+};
+
+// Draws circular % badges on vertical bars
+const ropPctBadgePlugin = {
+  id:'ropPctBadge',
+  afterDatasetsDraw(chart) {
+    const {ctx} = chart;
+    chart.data.datasets.forEach((ds, di) => {
+      if (!ds._pcts) return;
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      meta.data.forEach((bar, i) => {
+        const pct = ds._pcts[i];
+        if (pct == null) return;
+        const x = bar.x;
+        const barH = Math.abs(bar.base - bar.y);
+        if (barH < 24) return;
+        const y = bar.y + barH * 0.62;
+        const r = Math.min(14, barH * 0.28);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.strokeStyle = typeof ds.backgroundColor==='string' ? ds.backgroundColor : '#aaa';
+        ctx.lineWidth = 1.5;
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#222';
+        ctx.font = `bold ${Math.max(7, Math.min(9, r-2))}px Inter,sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(Math.round(pct)+'%', x, y);
+        ctx.restore();
+      });
+    });
+  }
+};
+
+// Draws eNPS score circles to the right of horizontal stacked bars
+const ropEnpsBadgePlugin = {
+  id:'ropEnpsBadge',
+  afterDraw(chart) {
+    if (!chart.config._enpsScores) return;
+    const {ctx, chartArea, scales} = chart;
+    const scores = chart.config._enpsScores;
+    chart.data.labels.forEach((_, i) => {
+      const score = scores[i];
+      if (score == null) return;
+      const y = scales.y.getPixelForValue(i);
+      const x = chartArea.right + 30;
+      const r = 19;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI*2);
+      ctx.fillStyle = score >= 0 ? '#22c55e' : '#ef4444';
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 9px Inter,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText((score>=0?'+':'')+Math.round(score), x, y);
+      ctx.restore();
+    });
+    ctx.save();
+    ctx.fillStyle = '#555';
+    ctx.font = 'bold 10px Inter,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('eNPS', chartArea.right + 30, chartArea.bottom + 16);
+    ctx.restore();
+  }
+};
+
+// N count per row (below x-axis) for Eng/Agot charts
+function ropGetN(rows, medicion, clascol, segmento) {
+  return ropFilterRows(rows, medicion, clascol, segmento).length;
 }
 
 function ropRenderEng(rows, orgRows, compRows, medLabel, compLabel, showOrg) {
@@ -8421,31 +8532,44 @@ function ropRenderEng(rows, orgRows, compRows, medLabel, compLabel, showOrg) {
   const engOrg = showOrg ? ropCalcEng(orgRows) : null;
   const engComp = compRows ? ropCalcEng(compRows) : null;
 
-  const metEl = document.getElementById('rop-met-eng');
-  if (eng.avg != null) {
-    metEl.style.display = 'flex';
-    metEl.innerHTML =
-      `<div class="rop-metric"><span class="rop-metric-val">${eng.avg.toFixed(2)}</span><span class="rop-metric-lbl">Promedio de Engagement</span></div>` +
-      (eng.pct != null ? `<div class="rop-metric"><span class="rop-metric-val" style="color:var(--ok)">${eng.pct.toFixed(0)}%</span><span class="rop-metric-lbl">% personas en Alto Engagement</span></div>` : '');
-  } else { metEl.style.display = 'none'; }
-
-  const orgEl = document.getElementById('rop-org-eng');
+  // Summary row
+  const sumEl = document.getElementById('rop-sum-eng');
   if (showOrg && engOrg && engOrg.avg != null) {
-    orgEl.style.display = 'block';
-    orgEl.textContent = `Promedio org: ${engOrg.avg.toFixed(2)} | ${engOrg.pct!=null?engOrg.pct.toFixed(0)+'% alto engagement':''}`;
-  } else { orgEl.style.display = 'none'; }
+    sumEl.style.display = 'flex';
+    sumEl.innerHTML =
+      `<span class="rop-sum-label">Promedio Organizacional</span>` +
+      `<span>Engagement-Sentido Pertenencia</span>` +
+      `<span class="rop-sum-val">${engOrg.avg.toFixed(2)}</span>` +
+      (engOrg.pct != null ? `<span>Personas en altos niveles de Engagement:</span><span class="rop-sum-pct">${engOrg.pct.toFixed(0)}%</span>` : '');
+  } else { sumEl.style.display = 'none'; }
 
-  const labels = compRows ? [medLabel, compLabel] : [medLabel];
-  const dataVals = compRows ? [eng.avg, engComp ? engComp.avg : null] : [eng.avg];
-  const colors = ['rgba(79,140,255,0.85)', 'rgba(180,180,180,0.7)'];
+  const nMain = rows.length;
+  const nComp = compRows ? compRows.length : null;
+  const labels = compRows
+    ? [[medLabel, `N=${nMain}`], [compLabel, `N=${nComp}`]]
+    : [[medLabel, `N=${nMain}`]];
+  const dataMain = [eng.avg];
+  const dataComp = engComp ? [engComp.avg] : [];
+  const pctsMain = [eng.pct];
+  const pctsComp = engComp ? [engComp.pct] : [];
+
+  const ds = [{ label:medLabel, data:dataMain, backgroundColor:'rgba(79,140,255,0.82)', borderRadius:5, _pcts:pctsMain }];
+  if (compRows && engComp) ds.push({ label:compLabel, data:dataComp, backgroundColor:'rgba(180,180,180,0.7)', borderRadius:5, _pcts:pctsComp });
 
   ROP.charts.eng = new Chart(document.getElementById('rop-chart-eng'), {
-    type: 'bar',
-    data: { labels, datasets: [{ data: dataVals, backgroundColor: colors.slice(0, labels.length), borderRadius: 6 }] },
-    options: {
-      responsive:true, plugins:{ legend:{display:false},
+    type:'bar',
+    data:{ labels, datasets: ds },
+    plugins:[ropValLabelPlugin, ropPctBadgePlugin],
+    options:{
+      responsive:true,
+      layout:{ padding:{ top:18 } },
+      _valLabels:true,
+      plugins:{ legend:{display:!!compRows, labels:{font:{size:10}}},
         tooltip:{ callbacks:{ label: ctx => ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : '—' } } },
-      scales:{ y:{ min:0, max:6, ticks:{stepSize:1}, grid:{color:'rgba(0,0,0,.06)'} }, x:{ grid:{display:false} } }
+      scales:{
+        y:{ min:0, max:6, ticks:{stepSize:1,font:{size:9}}, grid:{color:'rgba(0,0,0,.05)'} },
+        x:{ grid:{display:false}, ticks:{font:{size:9}} }
+      }
     }
   });
 }
@@ -8455,57 +8579,78 @@ function ropRenderAgot(rows, orgRows, compRows, medLabel, compLabel, showOrg) {
   const agotOrg = showOrg ? ropCalcAgot(orgRows) : null;
   const agotComp = compRows ? ropCalcAgot(compRows) : null;
 
-  const metEl = document.getElementById('rop-met-agot');
-  if (agot.avg != null) {
-    metEl.style.display = 'flex';
-    metEl.innerHTML =
-      `<div class="rop-metric"><span class="rop-metric-val" style="color:var(--err)">${agot.avg.toFixed(2)}</span><span class="rop-metric-lbl">Promedio de Agotamiento</span></div>` +
-      (agot.pct != null ? `<div class="rop-metric"><span class="rop-metric-val" style="color:var(--warn)">${agot.pct.toFixed(0)}%</span><span class="rop-metric-lbl">% personas en Alto Agotamiento</span></div>` : '');
-  } else { metEl.style.display = 'none'; }
-
-  const orgEl = document.getElementById('rop-org-agot');
+  const sumEl = document.getElementById('rop-sum-agot');
   if (showOrg && agotOrg && agotOrg.avg != null) {
-    orgEl.style.display = 'block';
-    orgEl.textContent = `Promedio org: ${agotOrg.avg.toFixed(2)} | ${agotOrg.pct!=null?agotOrg.pct.toFixed(0)+'% alto agotamiento':''}`;
-  } else { orgEl.style.display = 'none'; }
+    sumEl.style.display = 'flex';
+    sumEl.innerHTML =
+      `<span class="rop-sum-label">Promedio Organizacional</span>` +
+      `<span>Agotamiento</span>` +
+      `<span class="rop-sum-val" style="color:#ef4444">${agotOrg.avg.toFixed(2)}</span>` +
+      (agotOrg.pct != null ? `<span>Personas en altos niveles de Agotamiento:</span><span class="rop-sum-pct" style="color:#f59e0b">${agotOrg.pct.toFixed(0)}%</span>` : '');
+  } else { sumEl.style.display = 'none'; }
 
-  const labels = compRows ? [medLabel, compLabel] : [medLabel];
-  const dataVals = compRows ? [agot.avg, agotComp ? agotComp.avg : null] : [agot.avg];
-  const colors = ['rgba(255,99,132,0.85)', 'rgba(180,180,180,0.7)'];
+  const nMain = rows.length;
+  const nComp = compRows ? compRows.length : null;
+  const labels = compRows
+    ? [[medLabel, `N=${nMain}`], [compLabel, `N=${nComp}`]]
+    : [[medLabel, `N=${nMain}`]];
+
+  const ds = [{ label:medLabel, data:[agot.avg], backgroundColor:'rgba(248,113,113,0.82)', borderRadius:5, _pcts:[agot.pct] }];
+  if (compRows && agotComp) ds.push({ label:compLabel, data:[agotComp.avg], backgroundColor:'rgba(180,180,180,0.7)', borderRadius:5, _pcts:[agotComp.pct] });
 
   ROP.charts.agot = new Chart(document.getElementById('rop-chart-agot'), {
-    type: 'bar',
-    data: { labels, datasets: [{ data: dataVals, backgroundColor: colors.slice(0, labels.length), borderRadius: 6 }] },
-    options: {
-      responsive:true, plugins:{ legend:{display:false},
+    type:'bar',
+    data:{ labels, datasets:ds },
+    plugins:[ropValLabelPlugin, ropPctBadgePlugin],
+    options:{
+      responsive:true,
+      layout:{ padding:{ top:18 } },
+      _valLabels:true,
+      plugins:{ legend:{display:!!compRows, labels:{font:{size:10}}},
         tooltip:{ callbacks:{ label: ctx => ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : '—' } } },
-      scales:{ y:{ min:0, max:4, ticks:{stepSize:1}, grid:{color:'rgba(0,0,0,.06)'} }, x:{ grid:{display:false} } }
+      scales:{
+        y:{ min:0, max:4, ticks:{stepSize:1,font:{size:9}}, grid:{color:'rgba(0,0,0,.05)'} },
+        x:{ grid:{display:false}, ticks:{font:{size:9}} }
+      }
     }
   });
 }
 
-function ropRenderRD(rows, compRows, medLabel, compLabel) {
+function ropRenderRD(rows, orgRows, compRows, medLabel, compLabel) {
   const dimIds = [...ROP_RECURSOS, ...ROP_DEMANDAS];
   const dims = dimIds.map(id => MAESTRO.find(d => d.id === id)).filter(Boolean);
-  const labels = dims.map(d => d.nombre);
+  const labels = dims.map(d => {
+    const w = d.nombre.split(' ');
+    return w.length > 2 ? [w.slice(0,Math.ceil(w.length/2)).join(' '), w.slice(Math.ceil(w.length/2)).join(' ')] : d.nombre;
+  });
   const vals = dims.map(d => ropCalcDim(d.id, rows));
+  const orgVals = dims.map(d => ropCalcDim(d.id, orgRows));
   const valsComp = compRows ? dims.map(d => ropCalcDim(d.id, compRows)) : null;
+  const rCount = ROP_RECURSOS.length;
+  const colMain = dims.map((_,i) => i < rCount ? 'rgba(59,130,246,0.85)' : 'rgba(239,68,68,0.85)');
+  const colComp = dims.map((_,i) => i < rCount ? 'rgba(147,197,253,0.7)' : 'rgba(252,165,165,0.7)');
 
-  const resourceCount = ROP_RECURSOS.length;
-  const colors = dims.map((d,i) => i < resourceCount ? 'rgba(79,140,255,0.82)' : 'rgba(255,159,64,0.82)');
-
-  const datasets = [{ label: medLabel, data: vals, backgroundColor: colors, borderRadius:4 }];
-  if (valsComp) datasets.push({ label: compLabel, data: valsComp, backgroundColor: dims.map((d,i) => i < resourceCount ? 'rgba(79,140,255,0.3)' : 'rgba(255,159,64,0.3)'), borderRadius:4 });
+  const datasets = [{ label:medLabel, data:vals, backgroundColor:colMain, borderRadius:3, _valLabels:true }];
+  if (valsComp) datasets.push({ label:compLabel, data:valsComp, backgroundColor:colComp, borderRadius:3, _valLabels:true });
+  // Org average reference line
+  datasets.push({ label:'Promedio Organizacional', data:orgVals, type:'line', borderColor:'#6b7280', borderWidth:2, borderDash:[5,3], pointRadius:3, pointBackgroundColor:'#6b7280', fill:false, tension:0.1 });
 
   ROP.charts.rd = new Chart(document.getElementById('rop-chart-rd'), {
-    type: 'bar',
-    data: { labels, datasets },
-    options: {
-      indexAxis: 'y',
+    type:'bar',
+    data:{ labels, datasets },
+    plugins:[ropValLabelPlugin],
+    options:{
       responsive:true,
-      plugins:{ legend:{ display: !!compRows, position:'top', labels:{font:{size:11}} },
-        tooltip:{ callbacks:{ label: ctx => ctx.parsed.x != null ? ctx.parsed.x.toFixed(2) : '—' } } },
-      scales:{ x:{ min:1, max:5, ticks:{stepSize:1}, grid:{color:'rgba(0,0,0,.06)'} }, y:{ ticks:{font:{size:10}} } }
+      layout:{ padding:{ top:20 } },
+      _valLabels:true,
+      plugins:{
+        legend:{ display:true, position:'top', labels:{font:{size:9}, boxWidth:10, padding:8} },
+        tooltip:{ callbacks:{ label: ctx => ctx.parsed.y != null ? `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` : '—' } }
+      },
+      scales:{
+        y:{ min:1, max:5, ticks:{stepSize:1,font:{size:9}}, grid:{color:'rgba(0,0,0,.05)'} },
+        x:{ grid:{display:false}, ticks:{font:{size:8}, maxRotation:45} }
+      }
     }
   });
 }
@@ -8513,43 +8658,42 @@ function ropRenderRD(rows, compRows, medLabel, compLabel) {
 function ropRenderENPS(rows, compRows, medLabel, compLabel) {
   const enps = ropCalcEnps(rows);
   const enpsComp = compRows ? ropCalcEnps(compRows) : null;
+  if (!enps) return;
 
-  if (!enps) { document.getElementById('rop-met-enps').style.display='none'; return; }
-
-  const metEl = document.getElementById('rop-met-enps');
-  const sign = enps.score >= 0 ? '+' : '';
-  metEl.style.display = 'flex';
-  metEl.innerHTML = `<div class="rop-metric"><span class="rop-metric-val" style="color:${enps.score>=0?'var(--ok)':'var(--err)'}">${sign}${enps.score.toFixed(0)}</span><span class="rop-metric-lbl">eNPS</span></div>`;
-
-  const buildDataset = (data, label) => {
-    if (!data) return null;
+  const buildDs = (data, label) => {
+    if (!data) return [];
     const t = data.total;
     return [
-      { label:'Detractores', data:[data.detr/t*100], backgroundColor:'rgba(255,99,132,0.85)', borderRadius:4 },
-      { label:'Neutros',     data:[data.neutro/t*100], backgroundColor:'rgba(255,205,86,0.85)', borderRadius:4 },
-      { label:'Promotores',  data:[data.promo/t*100], backgroundColor:'rgba(75,192,96,0.85)', borderRadius:4 }
-    ].map(ds => ({...ds, stack: label}));
+      { label:'Detractores', data:[data.detr/t*100], backgroundColor:'#374151', borderRadius:0 },
+      { label:'Neutros',     data:[data.neutro/t*100], backgroundColor:'#fbbf24', borderRadius:0 },
+      { label:'Promotores',  data:[data.promo/t*100], backgroundColor:'#22c55e', borderRadius:0 }
+    ].map(ds => ({...ds, stack:label}));
   };
 
-  const ds1 = buildDataset(enps, medLabel);
-  const ds2 = enpsComp ? buildDataset(enpsComp, compLabel) : null;
-  const allDs = ds2 ? [...ds1, ...ds2] : ds1;
-  const chartLabels = ds2 ? [medLabel, compLabel] : [medLabel];
+  const chartLabels = compRows && enpsComp ? [medLabel, compLabel] : [medLabel];
+  const allDs = compRows && enpsComp ? [...buildDs(enps,medLabel), ...buildDs(enpsComp,compLabel)] : buildDs(enps,medLabel);
+  const scores = compRows && enpsComp ? [enps.score, enpsComp.score] : [enps.score];
 
-  ROP.charts.enps = new Chart(document.getElementById('rop-chart-enps'), {
-    type: 'bar',
-    data: { labels: chartLabels, datasets: allDs },
-    options: {
-      indexAxis: 'y',
+  const cfg = new Chart(document.getElementById('rop-chart-enps'), {
+    type:'bar',
+    data:{ labels:chartLabels, datasets:allDs },
+    plugins:[ropEnpsBadgePlugin],
+    options:{
+      indexAxis:'y',
       responsive:true,
-      plugins:{ legend:{ position:'bottom', labels:{font:{size:10}} },
-        tooltip:{ callbacks:{ label: ctx => `${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1)}%` } } },
+      layout:{ padding:{ right:56, bottom:20 } },
+      plugins:{
+        legend:{ display:true, position:'bottom', labels:{font:{size:9}, boxWidth:10, padding:6} },
+        tooltip:{ callbacks:{ label: ctx => `${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1)}%` } }
+      },
       scales:{
-        x:{ stacked:true, min:0, max:100, ticks:{ callback: v=>v+'%' }, grid:{color:'rgba(0,0,0,.06)'} },
-        y:{ stacked:true }
+        x:{ stacked:true, min:0, max:100, ticks:{callback:v=>v+'%', font:{size:9}}, grid:{color:'rgba(0,0,0,.05)'} },
+        y:{ stacked:true, ticks:{font:{size:9}} }
       }
     }
   });
+  cfg.config._enpsScores = scores;
+  ROP.charts.enps = cfg;
 }
 
 function ropDownloadPNG() {
