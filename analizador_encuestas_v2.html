@@ -1297,6 +1297,8 @@ function findCol(q, headers) {
     const parts = nh.split(/[-_()\s]/);
     if (parts.includes(nq)) return h;
     if (nh.startsWith('('+nq+')') || nh.startsWith('('+nq+'-') || nh.includes('-'+nq+'-') || nh.endsWith('-'+nq)) return h;
+    // "código texto" sin separador: primer token antes de espacio es el código
+    if (norm(String(h).split(/\s+/)[0]) === nq) return h;
   }
   return null;
 }
