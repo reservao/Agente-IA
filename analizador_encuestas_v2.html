@@ -381,11 +381,6 @@ tr:hover td { background: var(--bg); }
   .section-nav { padding: 0 1rem; }
   .sec-btn { padding: .6rem 1rem; font-size: 12px; }
 }
-@keyframes anomaly-dash {
-  to { stroke-dashoffset: -16; }
-}
-#s1org-svg rect.anomaly-ring {
-  animation: anomaly-dash 1.2s linear infinite;
 }
 </style>
 </head>
@@ -569,29 +564,6 @@ tr:hover td { background: var(--bg); }
         </div>
       </div>
 
-      <!-- Panel de nodos anómalos por segmentación -->
-      <div id="s1-anomaly-panel" style="display:none;margin-top:1.25rem">
-        <div class="slbl">⚠ Personas aisladas en segmentación</div>
-        <div class="card" style="padding:1rem">
-          <p style="font-size:12px;color:var(--text2);margin:0 0 .75rem">
-            Estas personas pertenecen a un segmento distinto al de la mayoría de sus vecinos directos en el árbol (jefatura y/o subordinados). Aparecen marcadas con borde naranja en el organigrama.
-          </p>
-          <div style="overflow-x:auto">
-            <table class="det-table" style="width:100%">
-              <thead>
-                <tr>
-                  <th>ID / RUT</th>
-                  <th>Segmento propio</th>
-                  <th>Segmento predominante de vecinos</th>
-                  <th>Vecinos totales</th>
-                </tr>
-              </thead>
-              <tbody id="s1-anomaly-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
       <!-- Tabla de IDs problemáticos -->
       <div id="s1p4-problems-wrap" style="display:none;margin-top:1.25rem">
         <div class="slbl">IDs con problemas detectados</div>
@@ -616,13 +588,10 @@ tr:hover td { background: var(--bg); }
         <div class="slbl">Descargar</div>
         <div class="dl-item">
           <div>
-            <div class="dl-title">Organigrama (imagen PNG / SVG)</div>
-            <div class="dl-sub">PNG descarga el árbol completo en alta resolución · SVG formato vectorial escalable ideal para grandes orgs</div>
+            <div class="dl-title">Organigrama (imagen PNG)</div>
+            <div class="dl-sub">Árbol jerárquico completo en alta resolución · abre en cualquier visor o imprime directamente</div>
           </div>
-          <div style="display:flex;gap:6px">
-            <button class="btn btn-secondary btn-sm" onclick="s1DownloadOrgPDF()">⬇ Descargar PNG</button>
-            <button class="btn btn-secondary btn-sm" onclick="s1DownloadOrgSvg()">⬇ Descargar SVG</button>
-          </div>
+          <button class="btn btn-secondary btn-sm" onclick="s1DownloadOrgPDF()">⬇ Descargar PNG</button>
         </div>
         <div class="dl-item">
           <div>
@@ -2814,7 +2783,6 @@ let s1OrgZoomBehavior = null;
 let s1OrgInitTransform = null;
 let S1_SEG_COL = null;
 let S1_SEG_VALUE_TO_COLOR = {}; // segmento → color (accesible para descarga)
-let S1_ANOMALY_DETAILS = [];    // lista de nodos anómalos (accesible para descarga)
 
 const S1_SEG_PALETTE = [
   '#E74C3C','#27AE60','#2980B9','#F39C12','#8E44AD',
@@ -3005,80 +2973,9 @@ function s1DrawOrg(orgResult) {
     }
   }
   // ── Detección de nodos anómalos ───────────────────────────────────────────
-  // Un nodo es "anómalo" si su segmento difiere del segmento mayoritario de sus vecinos directos
-  const anomalySet = new Set(); // IDs de nodos aislados en segmentación
-  const anomalyDetails = [];    // [{id, ownSeg, neighborSeg, neighborCount}]
-
-  if (S1_SEG_COL && Object.keys(idToSegColor).length > 0) {
-    const allNodes = root.descendants().filter(d => !d.data.isVirtual);
-    allNodes.forEach(d => {
-      const ownSeg = idToSegColor[d.data.id] ? Object.keys(segValueToColor).find(k => segValueToColor[k] === idToSegColor[d.data.id]) : null;
-      if (!ownSeg) return; // sin segmento asignado, no evaluar
-
-      // Recoger vecinos: padre (si no virtual) + hijos (si no virtuales)
-      const neighbors = [];
-      if (d.parent && !d.parent.data.isVirtual) neighbors.push(d.parent);
-      if (d.children) d.children.filter(c => !c.data.isVirtual).forEach(c => neighbors.push(c));
-
-      if (!neighbors.length) return; // raíz sola, no hay con qué comparar
-
-      // Contar segmentos de vecinos
-      const segCount = {};
-      neighbors.forEach(n => {
-        const nSeg = Object.keys(segValueToColor).find(k => segValueToColor[k] === idToSegColor[n.data.id]);
-        if (nSeg) segCount[nSeg] = (segCount[nSeg] || 0) + 1;
-      });
-
-      if (!Object.keys(segCount).length) return; // vecinos sin segmento
-
-      // Segmento dominante entre vecinos
-      const dominantSeg = Object.entries(segCount).sort((a, b) => b[1] - a[1])[0][0];
-      if (dominantSeg !== ownSeg) {
-        anomalySet.add(d.data.id);
-        anomalyDetails.push({
-          id: d.data.id,
-          ownSeg,
-          neighborSeg: dominantSeg,
-          neighborCount: neighbors.length
-        });
-      }
-    });
-
-    S1_ANOMALY_DETAILS = anomalyDetails.slice(); // exponer globalmente
-
-    // Mostrar/ocultar panel y llenar tabla
-    const panel = document.getElementById('s1-anomaly-panel');
-    const tbody = document.getElementById('s1-anomaly-tbody');
-    if (panel && tbody) {
-      if (anomalyDetails.length) {
-        tbody.innerHTML = '';
-        anomalyDetails.sort((a, b) => a.id.localeCompare(b.id)).forEach(item => {
-          const ownColor = segValueToColor[item.ownSeg] || '#999';
-          const nColor   = segValueToColor[item.neighborSeg] || '#999';
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td style="font-weight:600">${item.id}</td>
-            <td><span style="display:inline-flex;align-items:center;gap:5px">
-              <span style="width:10px;height:10px;border-radius:2px;background:${ownColor};display:inline-block;flex-shrink:0"></span>${item.ownSeg}
-            </span></td>
-            <td><span style="display:inline-flex;align-items:center;gap:5px">
-              <span style="width:10px;height:10px;border-radius:2px;background:${nColor};display:inline-block;flex-shrink:0"></span>${item.neighborSeg}
-            </span></td>
-            <td>${item.neighborCount}</td>`;
-          tbody.appendChild(tr);
-        });
-        panel.style.display = '';
-      } else {
-        panel.style.display = 'none';
-      }
-    }
-  } else {
+  if (!S1_SEG_COL || !Object.keys(idToSegColor).length) {
     S1_SEG_VALUE_TO_COLOR = {};
-    S1_ANOMALY_DETAILS = [];
-    const panel = document.getElementById('s1-anomaly-panel');
-    if (panel) panel.style.display = 'none';
   }
-  // ── Fin detección anómalos ────────────────────────────────────────────────
 
   // Aristas: elbow connector (líneas en ángulo recto, más legible)
   const links = root.links().filter(l => !l.source.data.isVirtual);
@@ -3103,20 +3000,6 @@ function s1DrawOrg(orgResult) {
     .attr('class', 'org-node')
     .attr('transform', d => `translate(${d.x - NODE_W/2},${d.y - NODE_H/2})`);
 
-  // Anillo exterior para nodos anómalos (se dibuja primero, queda detrás)
-  node.filter(d => anomalySet.has(d.data.id))
-    .append('rect')
-    .attr('class', 'anomaly-ring')
-    .attr('x', -4).attr('y', -4)
-    .attr('width', NODE_W + 8).attr('height', NODE_H + 8)
-    .attr('rx', NODE_RX + 3)
-    .attr('fill', 'none')
-    .attr('stroke', '#FF8C00')
-    .attr('stroke-width', 2.5)
-    .attr('stroke-dasharray', '5,3')
-    .attr('stroke-dashoffset', '0')
-    .attr('opacity', 0.9);
-
   node.append('rect')
     .attr('width', NODE_W).attr('height', NODE_H).attr('rx', NODE_RX)
     .attr('fill', d => {
@@ -3124,20 +3007,8 @@ function s1DrawOrg(orgResult) {
       const segColor = idToSegColor[d.data.id];
       return segColor || '#1A4A7A';
     })
-    .attr('stroke', d => {
-      if (d.data.hasError) return '#FF9999';
-      if (anomalySet.has(d.data.id)) return '#FF8C00';
-      return 'rgba(255,255,255,0.25)';
-    })
-    .attr('stroke-width', d => (d.data.hasError || anomalySet.has(d.data.id)) ? 2 : 1);
-
-  // Icono ⚠ en esquina de nodos anómalos
-  node.filter(d => anomalySet.has(d.data.id))
-    .append('text')
-    .attr('x', NODE_W - 4).attr('y', 4)
-    .attr('text-anchor', 'end').attr('dominant-baseline', 'hanging')
-    .attr('font-size', 10)
-    .text('⚠');
+    .attr('stroke', d => d.data.hasError ? '#FF9999' : 'rgba(255,255,255,0.25)')
+    .attr('stroke-width', d => d.data.hasError ? 2 : 1);
 
   // Línea 1: RUT / ID
   node.append('text')
@@ -3169,10 +3040,6 @@ function s1DrawOrg(orgResult) {
   node.append('title').text(d => {
     if (d.data.noJef)  return d.data.id + ' ⚠ Sin jefatura asignada';
     if (d.data.badJef) return d.data.id + ` ⚠ Jefatura "${d.data.jefaturaAsignada}" no existe`;
-    if (anomalySet.has(d.data.id)) {
-      const info = anomalyDetails.find(x => x.id === d.data.id);
-      return info ? `${d.data.id}\n⚠ Aislado: segmento "${info.ownSeg}" rodeado de "${info.neighborSeg}"` : d.data.id + ' ⚠ Aislado en segmentación';
-    }
     return d.data.id;
   });
 
@@ -3232,7 +3099,7 @@ function s1DownloadOrgPDF() {
 
   // Cap the SVG's declared pixel dimensions to avoid Chrome's rasterization limit.
   // viewBox shows full content regardless of declared size.
-  const MAX_SIDE = 5000;
+  const MAX_SIDE = 8000;
   const capScale = Math.min(1, MAX_SIDE / fullW, MAX_SIDE / fullH);
   const outW = Math.max(1, Math.round(fullW * capScale));
   const outH = Math.max(1, Math.round(fullH * capScale));
@@ -3263,7 +3130,7 @@ function s1DownloadOrgPDF() {
   const longestLabel = segEntries.reduce((mx, [seg]) => Math.max(mx, seg.length), 0);
   const LEG_W   = hasLegend ? Math.max(160, Math.min(280, IPAD * 2 + SWATCH + 8 + longestLabel * 7)) : 0;
   const LEG_H_content = hasLegend
-    ? (IPAD * 2 + 20 + segEntries.length * ROW_H + (S1_ANOMALY_DETAILS.length ? 28 : 0))
+    ? (IPAD * 2 + 20 + segEntries.length * ROW_H)
     : 0;
 
   function drawLegendPanel(ctx, orgH) {
@@ -3296,14 +3163,6 @@ function s1DownloadOrgPDF() {
       if (label !== seg) label = label.slice(0, -1) + '…';
       ctx.fillText(label, IPAD + SWATCH + 8, iy + SWATCH / 2 + 4 + 3);
     });
-    if (S1_ANOMALY_DETAILS.length) {
-      const ny = by + FONT_PX + 14 + segEntries.length * ROW_H + 6;
-      ctx.fillStyle = '#CC6600';
-      ctx.font = `bold 9px Arial, sans-serif`;
-      ctx.fillText(`⚠ ${S1_ANOMALY_DETAILS.length} aislado(s)`, IPAD, ny + 10);
-      ctx.font = `9px Arial, sans-serif`; ctx.fillStyle = '#888';
-      ctx.fillText('(segmento ≠ vecinos)', IPAD, ny + 22);
-    }
   }
 
   // Clone SVG: declared size = capped output (so browser can rasterize),
@@ -3388,33 +3247,6 @@ function s1DownloadOrgPDF() {
   img.src = blobUrl;
 }
 
-function s1DownloadOrgSvg() {
-  const svgEl = document.getElementById('s1org-svg');
-  const g     = document.getElementById('s1org-g');
-  if (!svgEl || !g || !g.children.length) {
-    alert('El organigrama no está disponible.');
-    return;
-  }
-  let bb;
-  try { bb = g.getBBox(); } catch(e) { bb = {x:0,y:0,width:800,height:600}; }
-  if (!bb.width || !bb.height) bb = {x:0,y:0,width:800,height:600};
-  const pad = 40;
-  const svgW = Math.ceil(bb.width + pad*2), svgH = Math.ceil(bb.height + pad*2);
-  const clone = svgEl.cloneNode(true);
-  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
-  // width/height as percentages → browser/viewer fits SVG to its window
-  clone.setAttribute('width', '100%'); clone.setAttribute('height', '100%');
-  clone.setAttribute('viewBox', `${bb.x-pad} ${bb.y-pad} ${svgW} ${svgH}`);
-  const cg = clone.querySelector('#s1org-g'); if(cg) cg.setAttribute('transform','');
-  const st = document.createElementNS('http://www.w3.org/2000/svg','style');
-  st.textContent = 'text{font-family:Arial,sans-serif}'; clone.insertBefore(st, clone.firstChild);
-  const blob = new Blob([new XMLSerializer().serializeToString(clone)], {type:'image/svg+xml;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = (S1.filename||'organigrama').replace(/\.\w+$/,'')+'_organigrama.svg';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
-}
 
 // Paso 4: Organigrama
 function s1RenderOrg() {
@@ -3604,20 +3436,21 @@ function s1DownloadOrgHtml() {
     return;
   }
 
+  // Capture tree bounding box in g's local coordinate space (before any transform).
+  // Used in the HTML script to compute a fit-by-height initial view.
+  let _bb;
+  try { _bb = g.getBBox(); } catch(e) { _bb = {x:0,y:0,width:800,height:600}; }
+  if (!_bb.width || !_bb.height) _bb = {x:0,y:0,width:800,height:600};
+
   // Serializar SVG completo
   const serializer = new XMLSerializer();
   const svgClone = svgEl.cloneNode(true);
   svgClone.removeAttribute('style');
   svgClone.setAttribute('id', 'org-svg');
   svgClone.setAttribute('style', 'width:100%;height:100%;display:block;');
-  // Reset g to the initial auto-fit transform calculated when the org was first rendered.
-  // This guarantees the HTML opens at a good view regardless of the user's current pan/zoom.
+  // Reset g transform to identity; the HTML script will apply the correct fit on load.
   const cloneInnerG = svgClone.querySelector('#s1org-g') || svgClone.querySelector('g');
-  const _it = s1OrgInitTransform;
-  const _itx = _it ? +_it.x.toFixed(2) : 0;
-  const _ity = _it ? +_it.y.toFixed(2) : 0;
-  const _itk = _it ? +_it.k.toFixed(4) : 1;
-  if (cloneInnerG) cloneInnerG.setAttribute('transform', `translate(${_itx},${_ity}) scale(${_itk})`);
+  if (cloneInnerG) cloneInnerG.setAttribute('transform', '');
   const svgStr = serializer.serializeToString(svgClone);
 
   // Construir leyenda HTML
@@ -3632,15 +3465,11 @@ function s1DownloadOrgHtml() {
     const items = segEntries.map(([seg, color]) =>
       `<div class="leg-item"><span class="leg-swatch" style="background:${color}"></span><span class="leg-label">${seg}</span></div>`
     ).join('');
-    const anomNote = S1_ANOMALY_DETAILS.length
-      ? `<div class="leg-anomaly">⚠ ${S1_ANOMALY_DETAILS.length} persona${S1_ANOMALY_DETAILS.length > 1 ? 's' : ''} con segmento distinto a sus vecinos</div>`
-      : '';
     legendHtml = `
     <div class="legend-panel">
       <div class="leg-title">Segmentación</div>
       <div class="leg-col">${segLabel ? segLabel.replace(/ \(\d+ grupos\)/, '') : ''}</div>
       ${items}
-      ${anomNote}
     </div>`;
   }
 
@@ -3706,23 +3535,6 @@ function s1DownloadOrgHtml() {
     </div>`;
   }
 
-  // Construir tabla de anomalías de segmentación
-  let anomalyHtml = '';
-  if (S1_ANOMALY_DETAILS.length) {
-    const rows = S1_ANOMALY_DETAILS.map(a =>
-      `<tr><td>${escHtml(a.id)}</td><td><span class="badge-seg" style="background:${S1_SEG_VALUE_TO_COLOR[a.ownSeg]||'#999'}">${escHtml(a.ownSeg)}</span></td><td><span class="badge-seg" style="background:${S1_SEG_VALUE_TO_COLOR[a.neighborSeg]||'#999'}">${escHtml(a.neighborSeg)}</span></td><td style="text-align:center">${a.neighborCount}</td></tr>`
-    ).join('');
-    anomalyHtml = `
-    <div class="anomaly-section">
-      <div class="anom-title">⚠ Personas aisladas en segmentación (${S1_ANOMALY_DETAILS.length})</div>
-      <p class="anom-desc">Estas personas pertenecen a un segmento distinto al de la mayoría de sus vecinos directos (jefatura y/o subordinados). Aparecen con borde naranja pulsante en el organigrama.</p>
-      <table class="anom-table">
-        <thead><tr><th>ID / RUT</th><th>Segmento propio</th><th>Segmento mayoritario vecinos</th><th>Vecinos</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
-  }
-
   const filename = (S1.filename || 'organigrama').replace(/\.\w+$/, '') + '_organigrama.html';
   const today = new Date().toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric' });
 
@@ -3747,7 +3559,6 @@ body{font-family:'DM Sans',Arial,sans-serif;background:#F5F3EF;color:#1A1916;min
 .leg-item{display:flex;align-items:center;gap:8px;font-size:12px;color:#1A1916;padding:3px 0}
 .leg-swatch{width:13px;height:13px;border-radius:3px;flex-shrink:0;border:1px solid rgba(0,0,0,.15)}
 .leg-label{word-break:break-word;line-height:1.3}
-.leg-anomaly{margin-top:8px;padding:6px 8px;background:#FFF3CD;border:1px solid #E8C94A;border-radius:5px;font-size:11px;color:#7A4A10;line-height:1.4}
 .org-wrap{flex:1;overflow:hidden;position:relative;background:#F9F8F5}
 #org-svg{width:100%;height:100%}
 .controls{position:absolute;top:10px;right:12px;display:flex;gap:6px;z-index:10}
@@ -3761,8 +3572,6 @@ body{font-family:'DM Sans',Arial,sans-serif;background:#F5F3EF;color:#1A1916;min
 .anom-table th{padding:6px 10px;text-align:left;font-size:11px;background:#ECEAE4;color:#6B6860;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #D8D4CC;font-weight:600}
 .anom-table td{padding:6px 10px;border-bottom:1px solid #F0EDE8}
 .badge-seg{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;color:#fff;font-weight:500}
-@keyframes anomaly-dash{to{stroke-dashoffset:-16}}
-#org-svg rect.anomaly-ring{animation:anomaly-dash 1.2s linear infinite}
 </style>
 </head>
 <body>
@@ -3783,7 +3592,6 @@ body{font-family:'DM Sans',Arial,sans-serif;background:#F5F3EF;color:#1A1916;min
 </div>
 ${noJefHtml}
 ${noMatchHtml}
-${anomalyHtml}
 <div class="footer">Organigrama generado con Analizador de Encuestas · Los datos se procesan localmente, ningún dato fue enviado a internet.</div>
 <script>
 (function(){
@@ -3795,10 +3603,25 @@ ${anomalyHtml}
     inner.setAttribute('transform', e.transform);
   });
   d3.select(svg).call(zoom);
-  // Restore the same initial fit that was calculated when the org was rendered in the app.
-  // Values are embedded at export time — no layout-dependent getBBox needed.
-  const initT = d3.zoomIdentity.translate(${_itx}, ${_ity}).scale(${_itk});
+  // Tree bounding box embedded at export time (in g's local coordinate space).
+  const TREE_MX = ${_bb.x.toFixed(1)};
+  const TREE_MY = ${_bb.y.toFixed(1)};
+  const TREE_W  = ${_bb.width.toFixed(1)};
+  const TREE_H  = ${_bb.height.toFixed(1)};
+  function buildInitialTransform() {
+    const W = svg.clientWidth  || 1200;
+    const H = svg.clientHeight || 700;
+    const sc = Math.min(0.95, H / (TREE_H + 80));
+    const tx = W / 2 - (TREE_MX + TREE_W / 2) * sc;
+    const ty = 40 - TREE_MY * sc;
+    return d3.zoomIdentity.translate(tx, ty).scale(sc);
+  }
+  let initT = buildInitialTransform();
   d3.select(svg).call(zoom.transform, initT);
+  window.addEventListener('load', () => {
+    initT = buildInitialTransform();
+    d3.select(svg).call(zoom.transform, initT);
+  });
   window.zoomIn    = () => d3.select(svg).call(zoom.scaleBy, 1.3);
   window.zoomOut   = () => d3.select(svg).call(zoom.scaleBy, 0.77);
   window.zoomReset = () => d3.select(svg).call(zoom.transform, initT);
