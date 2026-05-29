@@ -1238,48 +1238,62 @@ tr:hover td { background: var(--bg); }
 const MAESTRO = [
   {id:'autoeficacia',   nombre:'Autoeficacia',              preguntas:['SE1','SE2','SE3'],
    textos:['Tengo confianza en que podría resolver exitosamente eventos inesperados','Gracias a mis capacidades, puedo manejar situaciones imprevistas','Si tengo algún problema, normalmente puedo pensar en una buena solución'],
+   sistCols:['selfefficacy','selfeficacy','autoeficacia'],
    calculo:'promedio', rango:[1,5]},
   {id:'oportunidades',  nombre:'Oportunidades de desarrollo',preguntas:['oppor1','oppor2','oppor3'],
    textos:['En mi trabajo, tengo la oportunidad de desarrollarme','Mi trabajo me ofrece la oportunidad de aprender cosas nuevas','En mi trabajo, tengo la oportunidad de desarrollar mis fortalezas'],
+   sistCols:['opportunitiesfordevelopment','opportunities','oportunidadesdedesarrollo'],
    calculo:'promedio', rango:[1,5]},
   {id:'coaching',       nombre:'Coaching del líder',         preguntas:['coach1','coach2','coach3','coach5'],
    textos:['Mi jefe/jefes me informan si están satisfechos con mi trabajo','Mi jefe/jefes muestran consideración por mis problemas y aspiraciones laborales','Me siento valorado por mi jefe/jefes','Mi jefe/jefes son amistosos y abiertos conmigo'],
+   sistCols:['coach','coaching'],
    calculo:'promedio', rango:[1,5]},
   {id:'retroalimentacion',nombre:'Retroalimentación',        preguntas:['feedb1','feedb2','feedb3'],
    textos:['Recibo información suficiente sobre los objetivos de mi trabajo','Mi trabajo ofrece oportunidades para averiguar qué tan bien me desempeño en mis funciones','Recibo información suficiente respecto a los resultados de mi trabajo'],
+   sistCols:['feedback','retroalimentacion'],
    calculo:'promedio', rango:[1,5]},
   {id:'colaboracion',   nombre:'Colaboración',               preguntas:['soc1','soc2','soc3'],
    textos:['Si es necesario, ¿le puedes pedir ayuda a tus colegas?','Si aparecen dificultades en tu trabajo, ¿puedes contar con que tus colegas te apoyarán?','En tu trabajo, ¿te sientes valorado por tus colegas?'],
+   sistCols:['socialsupport','colaboracion'],
    calculo:'promedio', rango:[1,5]},
   {id:'engagement',     nombre:'Engagement',                 preguntas:['WE1','WE2','WE3','WE4','WE5','WE6','WE7','WE8','WE9'],
    textos:['Mientras trabajo me siento lleno de energía','Mientras trabajo me siento fuerte y energizado','Cuando me levanto en la mañana, siento ganas de trabajar','Me entusiasma mi trabajo','Mi trabajo me inspira','Me enorgullezco del trabajo que realizo','Me siento feliz cuando estoy trabajando intensamente','Cuando estoy trabajando, me olvido de todo lo que me rodea','Cuando estoy trabajando, pierdo la noción del tiempo'],
+   sistCols:['workengagement','engagement'],
    calculo:'promedio',rango:[0,6]},
   {id:'autonomia',      nombre:'Autonomía',                  preguntas:['auto1','auto2','auto3'],
    textos:['¿Tienes flexibilidad para hacer tu trabajo?','¿Tienes control sobre la forma en que realizas tu trabajo?','¿Puedes participar en la toma de decisiones relacionada con tu trabajo?'],
+   sistCols:['autonomy','autonomia'],
    calculo:'promedio', rango:[1,5]},
   {id:'optimismo',      nombre:'Optimismo',                  preguntas:['optim1','optim2','optim4','optim5'],
    textos:['Normalmente espero lo mejor durante momentos inciertos','Siempre soy optimista respecto a mi futuro','En general asumo que me van a pasar más cosas positivas que negativas','Cuento con que me van a pasar cosas buenas'],
+   sistCols:['optimism','optimismo'],
    calculo:'promedio', rango:[1,5]},
   {id:'presion',        nombre:'Presión en el trabajo',      preguntas:['wp1','wp2','wp3','wp4'],
    textos:['¿Debes trabajar rápidamente?','¿Tienes mucho trabajo por hacer?','¿Qué tan seguido debes trabajar más intensamente con el fin de cumplir un plazo límite?','¿Trabajas presionado por el tiempo?'],
+   sistCols:['workpressure','presioneneltrabajo'],
    calculo:'promedio', rango:[1,5]},
   {id:'cognitivas',     nombre:'Demandas cognitivas',        preguntas:['cogn1','cogn2','cogn3','cogn4'],
    textos:['¿Tu trabajo requiere de mucha concentración?','¿Tu trabajo necesita mucho cuidado o precisión?','¿Consideras tu trabajo como mentalmente exigente?','¿Tu trabajo requiere mantenerte constantemente atento?'],
+   sistCols:['cognitivedemands','demandascognitivas'],
    calculo:'promedio', rango:[1,5]},
   {id:'emocionales',    nombre:'Demandas emocionales',       preguntas:['emo1','emo2','emo3','emo4','emo6'],
    textos:['¿Tu trabajo es emocionalmente demandante?','En tu trabajo, ¿te toca enfrentarte con cosas que te afectan en el ámbito personal?','¿Te enfrentas a situaciones laborales emocionalmente intensas?','En tu trabajo, ¿debes tratar con clientes y/o colegas que se quejan todo el tiempo?','¿Debes tratar con clientes y/o colegas que no te tratan con el respeto y cortesía apropiada?'],
+   sistCols:['emotionaldemands','demandasemocionales'],
    calculo:'promedio', rango:[1,5]},
   {id:'conflictoderol', nombre:'Conflicto de rol',           preguntas:['rolcon1','rolcon3','rolcon4'],
    textos:['Recibo requerimientos contradictorios de personas distintas','Las expectativas de mis colegas son contradictorias','En mi trabajo, diferentes grupos de personas esperan cosas opuestas de mi'],
+   sistCols:['roleconflict','conflictoderol'],
    calculo:'promedio', rango:[1,5]},
   {id:'trabas',         nombre:'Trabas en el trabajo',       preguntas:['hassle2','hassle3','hassle4','hassle5'],
    textos:['Debo resolver muchas trabas para terminar mis proyectos/tareas','Debo pasar por muchos trámites y papeleos para hacer mi trabajo','En mi trabajo me enfrento a trabas inesperadas','Debo pasar por muchas trabas para terminar mi trabajo'],
+   sistCols:['hassles','trabas','trabaseneltrabajo'],
    calculo:'promedio', rango:[1,5]},
   {id:'enps',           nombre:'eNPS',                       preguntas:['eNPS'],
    textos:['En una escala del 1 al 10, donde 1 es nada dispuesto 10 es muy dispuesto ¿qué tan dispuesta/o estarías a recomendar a un familiar o amigo trabajar en esta organización?'],
    calculo:'enps',     rango:[1,10]},
   {id:'agotamiento',    nombre:'Agotamiento',                preguntas:['EX1','EX2','EX3','EX4'],
    textos:['Hay días en los que me siento cansado antes de empezar a  trabajar','Después del trabajo, tiendo a necesitar más tiempo que antes para relajarme y sentirme mejor','Durante el trabajo, a menudo me siento emocionalmente agotado','Después del trabajo, normalmente me siento desgastado y cansado'],
+   sistCols:['exhaustion','burnout','agotamiento'],
    calculo:'promedio', rango:[1,4]},
 ];
 const THR = 0.05;
@@ -1308,9 +1322,18 @@ function findCol(q, headers) {
   return null;
 }
 function findSysCol(dim, headers) {
+  // norm extendida: también quita guiones bajos (SELF_EFFICACY → selfefficacy)
+  const nrm = s => norm(s).replace(/_/g, '');
+  // Paso 1: aliases explícitos en inglés/alternativos (coincidencia exacta)
+  for (const alias of (dim.sistCols || [])) {
+    for (const h of headers) { if (nrm(h) === alias) return h; }
+  }
+  // Paso 2: búsqueda por nombre español, saltando columnas indicadoras/binarias
+  const nId = norm(dim.id), nNom = norm(dim.nombre);
   for (const h of headers) {
     const nh = norm(h);
-    if (nh.includes(norm(dim.id)) || nh.includes(norm(dim.nombre))) return h;
+    if (/^(riesgo|alto|bajo)/.test(nh) || /binary|bynary|binario/.test(nh)) continue;
+    if (nh.includes(nId) || nh.includes(nNom)) return h;
   }
   return null;
 }
