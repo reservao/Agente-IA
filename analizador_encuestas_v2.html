@@ -1387,9 +1387,21 @@ function runCalcAnalysis(headers, rows, detected) {
   const errDims = [], okDims = [];
   for (const { dim, qCols } of detected.found) {
     if (dim.calculo === 'enps') {
-      const eCol = findCol('eNPS', headers);
+      // Buscar columna eNPS con valores numéricos (saltar columnas de texto como eNPS_tag)
+      let eCol = null;
+      for (const h of headers) {
+        if (!h || !norm(h).replace(/_/g,'').includes('enps')) continue;
+        const idx = headers.indexOf(h);
+        const hasNums = rows.some(r => { const v = parseFloat(r[idx]); return !isNaN(v) && v >= 0 && v <= 10; });
+        if (hasNums) { eCol = h; break; }
+      }
+      // Fallback: usar qCols detectada si tiene datos numéricos
+      if (!eCol && qCols.length) {
+        const idx = headers.indexOf(qCols[0].col);
+        if (rows.some(r => !isNaN(parseFloat(r[idx])))) eCol = qCols[0].col;
+      }
       if (eCol) {
-        const vals = rows.map(r => parseFloat(r[headers.indexOf(eCol)])).filter(v => !isNaN(v));
+        const vals = rows.map(r => parseFloat(r[headers.indexOf(eCol)])).filter(v => !isNaN(v) && v >= 0 && v <= 10);
         const promo = vals.filter(v => v >= 9).length, detr = vals.filter(v => v <= 6).length;
         const calc = vals.length ? ((promo - detr) / vals.length * 100) : null;
         okDims.push({ dim, sysCol: null, qCols, note: 'eNPS: ' + (calc != null ? calc.toFixed(1) + '%' : '—'), errRows: [], calcColName: 'CALC_eNPS' });
