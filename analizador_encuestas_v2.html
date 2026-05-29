@@ -280,6 +280,9 @@ tr:hover td { background: var(--bg); }
 .td-warn { color: var(--warn); font-weight: 600; font-family: 'DM Mono', monospace; }
 .more-note { font-size: 11px; color: var(--text3); margin-top: 6px; font-style: italic; }
 .empty-summary { display:flex; align-items:center; flex-wrap:wrap; gap:6px; padding:8px 12px; border-radius:var(--radius-sm); border:1px solid var(--warn-border); background:#fdfaf3; }
+.empty-breakdown { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; padding:4px 12px 8px; }
+.meas-chip { background:var(--bg); border:1px solid var(--border); border-radius:99px; padding:2px 9px; font-size:11px; color:var(--text2); white-space:nowrap; }
+.meas-chip b { color:var(--text1); font-weight:600; }
 .btn-text { background:none; border:none; color:var(--accent); font-size:12px; cursor:pointer; padding:0; text-decoration:underline; margin-left:4px; }
 
 /* DOWNLOAD SECTION */
@@ -1479,11 +1482,22 @@ function renderRanges() {
               </tr>`).join('')}</tbody>
             </table>
           </div>
-        ` : `
-          <div class="empty-summary" style="${MT}">
-            <span class="badge warn">${p.emptyRows.length} vacíos</span>
-            <span style="color:var(--text2);font-size:12px">${p.emptyRows.length} persona${p.emptyRows.length>1?'s':''} sin respuesta en esta pregunta</span>
-            <button class="btn-text" onclick="event.stopPropagation();togEmptyDetail('ev${i}',this)">ver lista ▾</button>
+        ` : (() => {
+          // Agrupar vacíos por id (= medición en archivos multi-medición)
+          const grp = {};
+          for (const x of p.emptyRows) { const k = String(x.id); grp[k] = (grp[k]||0)+1; }
+          const entries = Object.entries(grp);
+          const breakdownHtml = entries.length <= 20
+            ? entries.map(([k,v]) => `<span class="meas-chip">${escHtml(k)} <b>${v}</b></span>`).join('')
+            : `<span style="color:var(--text2);font-size:11px">${entries.length} grupos distintos</span>`;
+          return `
+          <div style="${MT}">
+            <div class="empty-summary">
+              <span class="badge warn">${p.emptyRows.length} vacíos</span>
+              <span style="color:var(--text2);font-size:12px">${p.emptyRows.length} persona${p.emptyRows.length>1?'s':''} sin respuesta</span>
+              <button class="btn-text" onclick="event.stopPropagation();togEmptyDetail('ev${i}',this)">ver lista ▾</button>
+            </div>
+            <div class="empty-breakdown">${breakdownHtml}</div>
           </div>
           <div id="ev${i}" style="display:none;margin-top:6px">
             <div class="tbl-wrap">
@@ -1500,6 +1514,7 @@ function renderRanges() {
             ${p.emptyRows.length > 200 ? `<p class="more-note">Mostrando 200 de ${p.emptyRows.length} registros</p>` : ''}
           </div>
         `;
+        })();
       return `<div class="issue-item ${isErr ? 'is-err' : 'is-warn'}">
         <div class="issue-header" onclick="tog('rd${i}','ra${i}')">
           <div class="issue-header-left">
