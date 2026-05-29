@@ -289,6 +289,10 @@ tr:hover td { background: var(--bg); }
 .rop-chart-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
 .rop-chart-title { font-size:13px; font-weight:700; color:var(--text1); margin-bottom:8px; letter-spacing:.02em; text-transform:uppercase; }
 .rop-org-ref { font-size:11px; color:var(--text3); margin-top:6px; padding:4px 8px; background:var(--bg2); border-radius:4px; }
+.rop-metric-row { display:flex; gap:1.5rem; align-items:baseline; margin-bottom:10px; flex-wrap:wrap; }
+.rop-metric { display:flex; flex-direction:column; align-items:center; }
+.rop-metric-val { font-size:22px; font-weight:800; color:var(--accent); line-height:1; }
+.rop-metric-lbl { font-size:10px; color:var(--text3); margin-top:2px; text-align:center; }
 
 /* DOWNLOAD SECTION */
 .dl-section { margin-top: 1rem; }
@@ -1305,12 +1309,14 @@ tr:hover td { background: var(--bg); }
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem">
             <div class="rop-chart-card">
               <div class="rop-chart-title">Engagement</div>
-              <canvas id="rop-chart-eng" height="220"></canvas>
+              <div class="rop-metric-row" id="rop-met-eng" style="display:none"></div>
+              <canvas id="rop-chart-eng" height="200"></canvas>
               <div class="rop-org-ref" id="rop-org-eng" style="display:none"></div>
             </div>
             <div class="rop-chart-card">
               <div class="rop-chart-title">Agotamiento</div>
-              <canvas id="rop-chart-agot" height="220"></canvas>
+              <div class="rop-metric-row" id="rop-met-agot" style="display:none"></div>
+              <canvas id="rop-chart-agot" height="200"></canvas>
               <div class="rop-org-ref" id="rop-org-agot" style="display:none"></div>
             </div>
           </div>
@@ -1322,7 +1328,8 @@ tr:hover td { background: var(--bg); }
             </div>
             <div class="rop-chart-card">
               <div class="rop-chart-title">eNPS</div>
-              <canvas id="rop-chart-enps" height="260"></canvas>
+              <div class="rop-metric-row" id="rop-met-enps" style="display:none"></div>
+              <canvas id="rop-chart-enps" height="240"></canvas>
             </div>
           </div>
         </div>
@@ -8414,6 +8421,14 @@ function ropRenderEng(rows, orgRows, compRows, medLabel, compLabel, showOrg) {
   const engOrg = showOrg ? ropCalcEng(orgRows) : null;
   const engComp = compRows ? ropCalcEng(compRows) : null;
 
+  const metEl = document.getElementById('rop-met-eng');
+  if (eng.avg != null) {
+    metEl.style.display = 'flex';
+    metEl.innerHTML =
+      `<div class="rop-metric"><span class="rop-metric-val">${eng.avg.toFixed(2)}</span><span class="rop-metric-lbl">Promedio de Engagement</span></div>` +
+      (eng.pct != null ? `<div class="rop-metric"><span class="rop-metric-val" style="color:var(--ok)">${eng.pct.toFixed(0)}%</span><span class="rop-metric-lbl">% personas en Alto Engagement</span></div>` : '');
+  } else { metEl.style.display = 'none'; }
+
   const orgEl = document.getElementById('rop-org-eng');
   if (showOrg && engOrg && engOrg.avg != null) {
     orgEl.style.display = 'block';
@@ -8439,6 +8454,14 @@ function ropRenderAgot(rows, orgRows, compRows, medLabel, compLabel, showOrg) {
   const agot = ropCalcAgot(rows);
   const agotOrg = showOrg ? ropCalcAgot(orgRows) : null;
   const agotComp = compRows ? ropCalcAgot(compRows) : null;
+
+  const metEl = document.getElementById('rop-met-agot');
+  if (agot.avg != null) {
+    metEl.style.display = 'flex';
+    metEl.innerHTML =
+      `<div class="rop-metric"><span class="rop-metric-val" style="color:var(--err)">${agot.avg.toFixed(2)}</span><span class="rop-metric-lbl">Promedio de Agotamiento</span></div>` +
+      (agot.pct != null ? `<div class="rop-metric"><span class="rop-metric-val" style="color:var(--warn)">${agot.pct.toFixed(0)}%</span><span class="rop-metric-lbl">% personas en Alto Agotamiento</span></div>` : '');
+  } else { metEl.style.display = 'none'; }
 
   const orgEl = document.getElementById('rop-org-agot');
   if (showOrg && agotOrg && agotOrg.avg != null) {
@@ -8491,7 +8514,12 @@ function ropRenderENPS(rows, compRows, medLabel, compLabel) {
   const enps = ropCalcEnps(rows);
   const enpsComp = compRows ? ropCalcEnps(compRows) : null;
 
-  if (!enps) { return; }
+  if (!enps) { document.getElementById('rop-met-enps').style.display='none'; return; }
+
+  const metEl = document.getElementById('rop-met-enps');
+  const sign = enps.score >= 0 ? '+' : '';
+  metEl.style.display = 'flex';
+  metEl.innerHTML = `<div class="rop-metric"><span class="rop-metric-val" style="color:${enps.score>=0?'var(--ok)':'var(--err)'}">${sign}${enps.score.toFixed(0)}</span><span class="rop-metric-lbl">eNPS</span></div>`;
 
   const buildDataset = (data, label) => {
     if (!data) return null;
