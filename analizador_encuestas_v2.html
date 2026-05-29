@@ -285,6 +285,13 @@ tr:hover td { background: var(--bg); }
 .meas-chip b { color:var(--text1); font-weight:600; }
 .btn-text { background:none; border:none; color:var(--accent); font-size:12px; cursor:pointer; padding:0; text-decoration:underline; margin-left:4px; }
 
+/* ONE PAGE */
+.rop-chart-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
+.rop-chart-title { font-size:13px; font-weight:700; color:var(--text1); margin-bottom:8px; letter-spacing:.02em; text-transform:uppercase; }
+.rop-chart-kpi { font-size:28px; font-weight:800; color:var(--accent); text-align:center; margin-bottom:4px; line-height:1.1; }
+.rop-chart-kpi span { font-size:12px; font-weight:400; color:var(--text2); display:block; }
+.rop-org-ref { font-size:11px; color:var(--text3); margin-top:6px; padding:4px 8px; background:var(--bg2); border-radius:4px; }
+
 /* DOWNLOAD SECTION */
 .dl-section { margin-top: 1rem; }
 .dl-item {
@@ -959,6 +966,7 @@ tr:hover td { background: var(--bg); }
     <div style="display:flex;gap:8px;margin-bottom:1.5rem">
       <button class="btn btn-primary" id="r-sub-btn-tables" onclick="rGoSub('tables')">📊 Tablas Excel</button>
       <button class="btn btn-secondary" id="r-sub-btn-charts" onclick="rGoSub('charts')">📈 Gráficos</button>
+      <button class="btn btn-secondary" id="r-sub-btn-onepage" onclick="rGoSub('onepage')">📄 One Page</button>
     </div>
 
     <!-- SUBSECCIÓN TABLAS -->
@@ -1228,6 +1236,103 @@ tr:hover td { background: var(--bg); }
       </div><!-- /rc-tab-libre -->
       </div><!-- /rct-libre -->
     </div><!-- /r-sub-charts -->
+
+    <!-- SUBSECCIÓN ONE PAGE -->
+    <div id="r-sub-onepage" style="display:none">
+      <div class="card" style="background:var(--info-light);border-color:var(--info-border);margin-bottom:1rem">
+        <div style="font-size:13px;font-weight:600;color:var(--info);margin-bottom:.35rem">¿Qué hace esta sección?</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.6">
+          Genera un informe visual de una página para un segmento específico. Incluye los gráficos de Engagement, Agotamiento, Recursos &amp; Demandas y eNPS, con opción de comparar con mediciones anteriores.
+        </div>
+      </div>
+
+      <!-- Paso 1: Cargar BBDD -->
+      <div id="rop-upload-wrap">
+        <div class="card">
+          <div class="card-title">Paso 1: Cargar BBDD consolidada</div>
+          <div class="drop-zone" id="rop-dz" onclick="document.getElementById('rop-fi').click()"
+               ondragover="event.preventDefault();this.classList.add('drag-over')"
+               ondragleave="this.classList.remove('drag-over')"
+               ondrop="ropDrop(event)">
+            <input type="file" id="rop-fi" accept=".xlsx,.xls,.csv" style="display:none" onchange="ropLoadFile(event)">
+            <div class="drop-icon">📄</div>
+            <div class="drop-title">Arrastra la BBDD consolidada aquí</div>
+            <div class="drop-sub">o haz clic para seleccionar (.xlsx / .csv)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Paso 2: Filtros -->
+      <div id="rop-filters-wrap" style="display:none">
+        <div class="card">
+          <div class="card-title">Paso 2: Seleccionar segmento</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:.75rem" id="rop-filters-grid">
+            <div>
+              <label class="form-label">Medición principal</label>
+              <select id="rop-sel-medicion" class="form-select" onchange="ropUpdateSegmentos()"></select>
+            </div>
+            <div>
+              <label class="form-label">Comparar con (opcional)</label>
+              <select id="rop-sel-comp" class="form-select"><option value="">— Sin comparación —</option></select>
+            </div>
+            <div>
+              <label class="form-label">Columna de clasificación</label>
+              <select id="rop-sel-clascol" class="form-select" onchange="ropUpdateSegmentos()"></select>
+            </div>
+            <div>
+              <label class="form-label">Segmento</label>
+              <select id="rop-sel-segmento" class="form-select"></select>
+            </div>
+          </div>
+          <div style="margin-top:1rem;display:flex;gap:.5rem;flex-wrap:wrap">
+            <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="rop-show-org" checked> Mostrar promedio organizacional
+            </label>
+          </div>
+          <div style="margin-top:1rem">
+            <button class="btn btn-primary" onclick="ropGenerate()">🔍 Generar One Page</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vista previa One Page -->
+      <div id="rop-preview" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+          <div id="rop-title-bar" style="font-size:15px;font-weight:700;color:var(--text1)"></div>
+          <button class="btn btn-secondary" style="font-size:12px" onclick="ropDownloadPNG()">⬇ Descargar PNG</button>
+        </div>
+        <!-- Contenedor capturable -->
+        <div id="rop-canvas-wrap" style="background:#fff;padding:24px;border-radius:var(--radius);border:1px solid var(--border)">
+          <!-- Fila 1: Engagement (izq grande) + Agotamiento (der grande) -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem">
+            <div class="rop-chart-card">
+              <div class="rop-chart-title">Engagement</div>
+              <div class="rop-chart-kpi" id="rop-kpi-eng"></div>
+              <canvas id="rop-chart-eng" height="200"></canvas>
+              <div class="rop-org-ref" id="rop-org-eng" style="display:none"></div>
+            </div>
+            <div class="rop-chart-card">
+              <div class="rop-chart-title">Agotamiento</div>
+              <div class="rop-chart-kpi" id="rop-kpi-agot"></div>
+              <canvas id="rop-chart-agot" height="200"></canvas>
+              <div class="rop-org-ref" id="rop-org-agot" style="display:none"></div>
+            </div>
+          </div>
+          <!-- Fila 2: Recursos & Demandas (izq ancho) + eNPS (der) -->
+          <div style="display:grid;grid-template-columns:3fr 2fr;gap:1.5rem">
+            <div class="rop-chart-card">
+              <div class="rop-chart-title">Recursos &amp; Demandas</div>
+              <canvas id="rop-chart-rd" height="260"></canvas>
+            </div>
+            <div class="rop-chart-card">
+              <div class="rop-chart-title">eNPS</div>
+              <div class="rop-chart-kpi" id="rop-kpi-enps"></div>
+              <canvas id="rop-chart-enps" height="260"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /r-sub-onepage -->
 
   </div><!-- /main -->
 </div><!-- /sec3 -->
@@ -3987,10 +4092,10 @@ function goSection(n) {
 
 // ─── SECCIÓN 3: REPORTERÍA ─────────────────────────────────────────────────
 function rGoSub(sub) {
-  document.getElementById('r-sub-tables').style.display = sub==='tables' ? 'block' : 'none';
-  document.getElementById('r-sub-charts').style.display = sub==='charts' ? 'block' : 'none';
-  document.getElementById('r-sub-btn-tables').className = sub==='tables' ? 'btn btn-primary' : 'btn btn-secondary';
-  document.getElementById('r-sub-btn-charts').className = sub==='charts' ? 'btn btn-primary' : 'btn btn-secondary';
+  ['tables','charts','onepage'].forEach(s => {
+    document.getElementById('r-sub-'+s).style.display = sub===s ? 'block' : 'none';
+    document.getElementById('r-sub-btn-'+s).className = sub===s ? 'btn btn-primary' : 'btn btn-secondary';
+  });
 }
 
 let R = { headers:[], rows:[], filename:'', mediciones:[], selectedMeds:[] };
@@ -8122,6 +8227,345 @@ function rBuildEnpsSheet(rowsByMed, enpsTagIdx, claIdx1, claIdx2, empresa) {
     sty(ri,7, cs('000000','FFFFFF',true,'center'));
   }
   return ws;
+}
+
+// ─── ONE PAGE ───────────────────────────────────────────────────────────────
+let ROP = {
+  headers:[], rows:[], mediciones:[], clasCols:[],
+  charts:{ eng:null, agot:null, rd:null, enps:null }
+};
+
+const ROP_RECURSOS = ['autoeficacia','oportunidades','coaching','retroalimentacion','colaboracion','autonomia','optimismo'];
+const ROP_DEMANDAS = ['presion','cognitivas','emocionales','conflictoderol','trabas'];
+
+function ropDrop(e) {
+  e.preventDefault();
+  document.getElementById('rop-dz').classList.remove('drag-over');
+  if (e.dataTransfer.files.length) ropProcess(e.dataTransfer.files[0]);
+}
+
+function ropLoadFile(e) { if (e.target.files.length) ropProcess(e.target.files[0]); }
+
+function ropProcess(file) {
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const wb = XLSX.read(ev.target.result, {type:'binary'});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    if (!data.length) return;
+    ROP.headers = data[0].map(String);
+    ROP.rows = data.slice(1).filter(r => r.some(c => String(c).trim() !== ''));
+    ropBuildFilters();
+    document.getElementById('rop-upload-wrap').style.display = 'none';
+    document.getElementById('rop-filters-wrap').style.display = 'block';
+    document.getElementById('rop-preview').style.display = 'none';
+  };
+  reader.readAsBinaryString(file);
+}
+
+function ropBuildFilters() {
+  const medCol = detectMedicionCol(ROP.headers);
+  ROP.mediciones = medCol ? [...new Set(ROP.rows.map(r => String(r[ROP.headers.indexOf(medCol)]).trim()).filter(Boolean))].sort() : [];
+
+  // Populate medición selects
+  const selMed = document.getElementById('rop-sel-medicion');
+  const selComp = document.getElementById('rop-sel-comp');
+  selMed.innerHTML = ROP.mediciones.map(m => `<option value="${escHtml(m)}">${escHtml(m)}</option>`).join('');
+  selComp.innerHTML = '<option value="">— Sin comparación —</option>' +
+    ROP.mediciones.map(m => `<option value="${escHtml(m)}">${escHtml(m)}</option>`).join('');
+
+  // Determine classification columns (exclude known system/score cols, medicion col itself)
+  const skip = new Set([medCol]);
+  const systemPattern = /^(SE|EX|oppor|coach|retro|colab|auto|opt|press|cogn|emoc|conf|trab|ENG|NPS|enps|riesgo|alto|bajo|binary|bynary)/i;
+  ROP.clasCols = ROP.headers.filter(h => {
+    if (!h || skip.has(h)) return false;
+    if (systemPattern.test(h)) return false;
+    const vals = [...new Set(ROP.rows.map(r => String(r[ROP.headers.indexOf(h)]).trim()).filter(Boolean))];
+    return vals.length >= 2 && vals.length <= 80;
+  });
+
+  const selClas = document.getElementById('rop-sel-clascol');
+  selClas.innerHTML = '<option value="">— Toda la organización —</option>' +
+    ROP.clasCols.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
+
+  ropUpdateSegmentos();
+}
+
+function ropUpdateSegmentos() {
+  const clascol = document.getElementById('rop-sel-clascol').value;
+  const medicion = document.getElementById('rop-sel-medicion').value;
+  const medCol = detectMedicionCol(ROP.headers);
+  let filteredRows = ROP.rows;
+  if (medCol && medicion) {
+    const mi = ROP.headers.indexOf(medCol);
+    filteredRows = filteredRows.filter(r => String(r[mi]).trim() === medicion);
+  }
+  const selSeg = document.getElementById('rop-sel-segmento');
+  if (!clascol) {
+    selSeg.innerHTML = '<option value="">Toda la organización</option>';
+    return;
+  }
+  const ci = ROP.headers.indexOf(clascol);
+  const segs = [...new Set(filteredRows.map(r => String(r[ci]).trim()).filter(Boolean))].sort();
+  selSeg.innerHTML = segs.map(s => `<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('');
+}
+
+function ropFilterRows(rows, medicion, clascol, segmento) {
+  const medCol = detectMedicionCol(ROP.headers);
+  let r = rows;
+  if (medCol && medicion) {
+    const mi = ROP.headers.indexOf(medCol);
+    r = r.filter(row => String(row[mi]).trim() === medicion);
+  }
+  if (clascol && segmento) {
+    const ci = ROP.headers.indexOf(clascol);
+    r = r.filter(row => String(row[ci]).trim() === segmento);
+  }
+  return r;
+}
+
+function ropCalcDim(dimId, rows) {
+  const dim = MAESTRO.find(d => d.id === dimId);
+  if (!dim) return null;
+  const qCols = dim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  if (!qCols.length) return null;
+  const vals = rows.map(r => {
+    const vs = qCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
+    return vs.length ? vs.reduce((a,b)=>a+b,0)/vs.length : null;
+  }).filter(v => v !== null);
+  if (!vals.length) return null;
+  return vals.reduce((a,b)=>a+b,0)/vals.length;
+}
+
+function ropCalcEng(rows) {
+  const dim = MAESTRO.find(d => d.id === 'engagement');
+  if (!dim) return {avg:null, pct:null};
+  const qCols = dim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  if (!qCols.length) return {avg:null, pct:null};
+  const vals = rows.map(r => {
+    const vs = qCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
+    return vs.length ? vs.reduce((a,b)=>a+b,0)/vs.length : null;
+  }).filter(v => v !== null);
+  if (!vals.length) return {avg:null, pct:null};
+  const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+  const pct = vals.filter(v => v >= 4.5).length / vals.length * 100;
+  return {avg, pct};
+}
+
+function ropCalcAgot(rows) {
+  const dim = MAESTRO.find(d => d.id === 'agotamiento');
+  if (!dim) return {avg:null, pct:null};
+  const qCols = dim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  if (!qCols.length) return {avg:null, pct:null};
+  const vals = rows.map(r => {
+    const vs = qCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
+    return vs.length ? vs.reduce((a,b)=>a+b,0)/vs.length : null;
+  }).filter(v => v !== null);
+  if (!vals.length) return {avg:null, pct:null};
+  const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+  const pct = vals.filter(v => v >= 3.0).length / vals.length * 100;
+  return {avg, pct};
+}
+
+function ropCalcEnps(rows) {
+  let eCol = null;
+  for (const h of ROP.headers) {
+    if (!h || !norm(h).replace(/_/g,'').includes('enps')) continue;
+    const idx = ROP.headers.indexOf(h);
+    const hasNums = rows.some(r => { const v=parseFloat(r[idx]); return !isNaN(v) && v>=0 && v<=10; });
+    if (hasNums) { eCol = h; break; }
+  }
+  if (!eCol) return null;
+  const idx = ROP.headers.indexOf(eCol);
+  const vals = rows.map(r => parseFloat(r[idx])).filter(v => !isNaN(v) && v>=0 && v<=10);
+  if (!vals.length) return null;
+  const promo = vals.filter(v=>v>=9).length;
+  const neutro = vals.filter(v=>v>=7&&v<=8).length;
+  const detr = vals.filter(v=>v<=6).length;
+  const score = (promo-detr)/vals.length*100;
+  return {score, promo, neutro, detr, total:vals.length};
+}
+
+function ropGenerate() {
+  const medicion = document.getElementById('rop-sel-medicion').value;
+  const comp = document.getElementById('rop-sel-comp').value;
+  const clascol = document.getElementById('rop-sel-clascol').value;
+  const segmento = document.getElementById('rop-sel-segmento').value;
+  const showOrg = document.getElementById('rop-show-org').checked;
+
+  const rows = ropFilterRows(ROP.rows, medicion, clascol, segmento);
+  const orgRows = ropFilterRows(ROP.rows, medicion, null, null);
+  const compRows = comp ? ropFilterRows(ROP.rows, comp, clascol, segmento) : null;
+
+  if (!rows.length) { alert('No hay datos para la selección.'); return; }
+
+  const label = segmento || 'Toda la organización';
+  document.getElementById('rop-title-bar').textContent = `${label} — ${medicion}${comp ? ' vs. '+comp : ''}`;
+
+  // Destroy old charts
+  Object.keys(ROP.charts).forEach(k => { if (ROP.charts[k]) { ROP.charts[k].destroy(); ROP.charts[k]=null; } });
+
+  ropRenderEng(rows, orgRows, compRows, medicion, comp, showOrg);
+  ropRenderAgot(rows, orgRows, compRows, medicion, comp, showOrg);
+  ropRenderRD(rows, compRows, medicion, comp);
+  ropRenderENPS(rows, compRows, medicion, comp);
+
+  document.getElementById('rop-preview').style.display = 'block';
+  document.getElementById('rop-preview').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function ropRenderEng(rows, orgRows, compRows, medLabel, compLabel, showOrg) {
+  const eng = ropCalcEng(rows);
+  const engOrg = showOrg ? ropCalcEng(orgRows) : null;
+  const engComp = compRows ? ropCalcEng(compRows) : null;
+
+  const kpi = document.getElementById('rop-kpi-eng');
+  if (eng.avg != null) {
+    kpi.innerHTML = `${eng.avg.toFixed(2)}<span>${eng.pct != null ? eng.pct.toFixed(0)+'% alto engagement' : ''}</span>`;
+  } else { kpi.textContent = '—'; }
+
+  const orgEl = document.getElementById('rop-org-eng');
+  if (showOrg && engOrg && engOrg.avg != null) {
+    orgEl.style.display = 'block';
+    orgEl.textContent = `Promedio org: ${engOrg.avg.toFixed(2)} | ${engOrg.pct!=null?engOrg.pct.toFixed(0)+'% alto engagement':''}`;
+  } else { orgEl.style.display = 'none'; }
+
+  const labels = compRows ? [medLabel, compLabel] : [medLabel];
+  const dataVals = compRows ? [eng.avg, engComp ? engComp.avg : null] : [eng.avg];
+  const colors = ['rgba(79,140,255,0.85)', 'rgba(180,180,180,0.7)'];
+
+  ROP.charts.eng = new Chart(document.getElementById('rop-chart-eng'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: dataVals, backgroundColor: colors.slice(0, labels.length), borderRadius: 6 }] },
+    options: {
+      responsive:true, plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label: ctx => ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : '—' } } },
+      scales:{ y:{ min:0, max:6, ticks:{stepSize:1}, grid:{color:'rgba(0,0,0,.06)'} }, x:{ grid:{display:false} } }
+    }
+  });
+}
+
+function ropRenderAgot(rows, orgRows, compRows, medLabel, compLabel, showOrg) {
+  const agot = ropCalcAgot(rows);
+  const agotOrg = showOrg ? ropCalcAgot(orgRows) : null;
+  const agotComp = compRows ? ropCalcAgot(compRows) : null;
+
+  const kpi = document.getElementById('rop-kpi-agot');
+  if (agot.avg != null) {
+    kpi.innerHTML = `${agot.avg.toFixed(2)}<span>${agot.pct != null ? agot.pct.toFixed(0)+'% alto agotamiento' : ''}</span>`;
+  } else { kpi.textContent = '—'; }
+
+  const orgEl = document.getElementById('rop-org-agot');
+  if (showOrg && agotOrg && agotOrg.avg != null) {
+    orgEl.style.display = 'block';
+    orgEl.textContent = `Promedio org: ${agotOrg.avg.toFixed(2)} | ${agotOrg.pct!=null?agotOrg.pct.toFixed(0)+'% alto agotamiento':''}`;
+  } else { orgEl.style.display = 'none'; }
+
+  const labels = compRows ? [medLabel, compLabel] : [medLabel];
+  const dataVals = compRows ? [agot.avg, agotComp ? agotComp.avg : null] : [agot.avg];
+  const colors = ['rgba(255,99,132,0.85)', 'rgba(180,180,180,0.7)'];
+
+  ROP.charts.agot = new Chart(document.getElementById('rop-chart-agot'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: dataVals, backgroundColor: colors.slice(0, labels.length), borderRadius: 6 }] },
+    options: {
+      responsive:true, plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label: ctx => ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : '—' } } },
+      scales:{ y:{ min:0, max:4, ticks:{stepSize:1}, grid:{color:'rgba(0,0,0,.06)'} }, x:{ grid:{display:false} } }
+    }
+  });
+}
+
+function ropRenderRD(rows, compRows, medLabel, compLabel) {
+  const dimIds = [...ROP_RECURSOS, ...ROP_DEMANDAS];
+  const dims = dimIds.map(id => MAESTRO.find(d => d.id === id)).filter(Boolean);
+  const labels = dims.map(d => d.nombre);
+  const vals = dims.map(d => ropCalcDim(d.id, rows));
+  const valsComp = compRows ? dims.map(d => ropCalcDim(d.id, compRows)) : null;
+
+  const resourceCount = ROP_RECURSOS.length;
+  const colors = dims.map((d,i) => i < resourceCount ? 'rgba(79,140,255,0.82)' : 'rgba(255,159,64,0.82)');
+
+  const datasets = [{ label: medLabel, data: vals, backgroundColor: colors, borderRadius:4 }];
+  if (valsComp) datasets.push({ label: compLabel, data: valsComp, backgroundColor: dims.map((d,i) => i < resourceCount ? 'rgba(79,140,255,0.3)' : 'rgba(255,159,64,0.3)'), borderRadius:4 });
+
+  ROP.charts.rd = new Chart(document.getElementById('rop-chart-rd'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      indexAxis: 'y',
+      responsive:true,
+      plugins:{ legend:{ display: !!compRows, position:'top', labels:{font:{size:11}} },
+        tooltip:{ callbacks:{ label: ctx => ctx.parsed.x != null ? ctx.parsed.x.toFixed(2) : '—' } } },
+      scales:{ x:{ min:1, max:5, ticks:{stepSize:1}, grid:{color:'rgba(0,0,0,.06)'} }, y:{ ticks:{font:{size:10}} } }
+    }
+  });
+}
+
+function ropRenderENPS(rows, compRows, medLabel, compLabel) {
+  const enps = ropCalcEnps(rows);
+  const enpsComp = compRows ? ropCalcEnps(compRows) : null;
+
+  const kpi = document.getElementById('rop-kpi-enps');
+  if (enps) {
+    const sign = enps.score >= 0 ? '+' : '';
+    kpi.innerHTML = `${sign}${enps.score.toFixed(0)}<span>eNPS Score</span>`;
+    kpi.style.color = enps.score >= 0 ? 'var(--ok)' : 'var(--err)';
+  } else { kpi.textContent = '—'; kpi.style.color = ''; }
+
+  if (!enps) { return; }
+
+  const buildDataset = (data, label) => {
+    if (!data) return null;
+    const t = data.total;
+    return [
+      { label:'Detractores', data:[data.detr/t*100], backgroundColor:'rgba(255,99,132,0.85)', borderRadius:4 },
+      { label:'Neutros',     data:[data.neutro/t*100], backgroundColor:'rgba(255,205,86,0.85)', borderRadius:4 },
+      { label:'Promotores',  data:[data.promo/t*100], backgroundColor:'rgba(75,192,96,0.85)', borderRadius:4 }
+    ].map(ds => ({...ds, stack: label}));
+  };
+
+  const ds1 = buildDataset(enps, medLabel);
+  const ds2 = enpsComp ? buildDataset(enpsComp, compLabel) : null;
+  const allDs = ds2 ? [...ds1, ...ds2] : ds1;
+  const chartLabels = ds2 ? [medLabel, compLabel] : [medLabel];
+
+  ROP.charts.enps = new Chart(document.getElementById('rop-chart-enps'), {
+    type: 'bar',
+    data: { labels: chartLabels, datasets: allDs },
+    options: {
+      indexAxis: 'y',
+      responsive:true,
+      plugins:{ legend:{ position:'bottom', labels:{font:{size:10}} },
+        tooltip:{ callbacks:{ label: ctx => `${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1)}%` } } },
+      scales:{
+        x:{ stacked:true, min:0, max:100, ticks:{ callback: v=>v+'%' }, grid:{color:'rgba(0,0,0,.06)'} },
+        y:{ stacked:true }
+      }
+    }
+  });
+}
+
+function ropDownloadPNG() {
+  const doCapture = () => {
+    const wrap = document.getElementById('rop-canvas-wrap');
+    const title = document.getElementById('rop-title-bar').textContent.replace(/[^a-z0-9_\- ]/gi,'').replace(/\s+/g,'_');
+    html2canvas(wrap, {backgroundColor:'#ffffff', scale:2}).then(canvas => {
+      const link = document.createElement('a');
+      link.download = `OnePage_${title || 'reporte'}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
+  };
+  if (typeof html2canvas !== 'undefined') {
+    doCapture();
+  } else {
+    const s = document.createElement('script');
+    s.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
+    s.onload = doCapture;
+    s.onerror = () => alert('No se pudo cargar html2canvas. Verifica tu conexión a internet.');
+    document.head.appendChild(s);
+  }
 }
 </script>
 </body>
