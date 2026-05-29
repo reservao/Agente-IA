@@ -3097,19 +3097,20 @@ function s1DownloadOrgPDF() {
   const fullW = bb.width  + pad * 2;
   const fullH = bb.height + pad * 2;
 
+  // SVG rasterization limit: Chrome fails to load <img> from SVG blobs wider than ~32000px.
+  // This is separate from the canvas size limit — the SVG declared dimensions must stay small.
+  const SVG_MAX = 32000;
+  const capScale = Math.min(1, SVG_MAX / fullW, SVG_MAX / fullH);
+  const outW = Math.max(1, Math.round(fullW * capScale));
+  const outH = Math.max(1, Math.round(fullH * capScale));
+
   // Detect Chrome's actual canvas limit at runtime (modern Chrome: 65535, older: 32767).
-  // We test by setting canvas.width and reading it back — if it gets capped we know the limit.
   const CANVAS_MAX = (() => {
     const t = document.createElement('canvas');
     t.width = 65535; if (t.width >= 65535) return 65535;
     t.width = 32767; if (t.width >= 32767) return 32767;
     return 16383;
   })();
-
-  // Scale so the org fits in the detected canvas (leave room for legend on width).
-  const capScale = Math.min(1, (CANVAS_MAX - LEG_W) / fullW, CANVAS_MAX / fullH);
-  const outW = Math.max(1, Math.round(fullW * capScale));
-  const outH = Math.max(1, Math.round(fullH * capScale));
 
   // Legend panel
   const segEntries = Object.entries(S1_SEG_VALUE_TO_COLOR);
@@ -3629,7 +3630,7 @@ ${noMatchHtml}
     // Also ensure the tree isn't wider than the viewport on load.
     const scByH = H / (TREE_H + 80);
     const scByW = W / (TREE_W + 80);
-    const sc = Math.min(scByH, scByW, 2);
+    const sc = Math.min(scByH, scByW, 2) * 0.8;
     const tx = W / 2 - (TREE_MX + TREE_W / 2) * sc;
     const ty = (H - TREE_H * sc) / 2 - TREE_MY * sc;
     return d3.zoomIdentity.translate(tx, ty).scale(sc);
