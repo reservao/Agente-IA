@@ -288,8 +288,6 @@ tr:hover td { background: var(--bg); }
 /* ONE PAGE */
 .rop-chart-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
 .rop-chart-title { font-size:13px; font-weight:700; color:var(--text1); margin-bottom:8px; letter-spacing:.02em; text-transform:uppercase; }
-.rop-chart-kpi { font-size:28px; font-weight:800; color:var(--accent); text-align:center; margin-bottom:4px; line-height:1.1; }
-.rop-chart-kpi span { font-size:12px; font-weight:400; color:var(--text2); display:block; }
 .rop-org-ref { font-size:11px; color:var(--text3); margin-top:6px; padding:4px 8px; background:var(--bg2); border-radius:4px; }
 
 /* DOWNLOAD SECTION */
@@ -1307,14 +1305,12 @@ tr:hover td { background: var(--bg); }
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem">
             <div class="rop-chart-card">
               <div class="rop-chart-title">Engagement</div>
-              <div class="rop-chart-kpi" id="rop-kpi-eng"></div>
-              <canvas id="rop-chart-eng" height="200"></canvas>
+              <canvas id="rop-chart-eng" height="220"></canvas>
               <div class="rop-org-ref" id="rop-org-eng" style="display:none"></div>
             </div>
             <div class="rop-chart-card">
               <div class="rop-chart-title">Agotamiento</div>
-              <div class="rop-chart-kpi" id="rop-kpi-agot"></div>
-              <canvas id="rop-chart-agot" height="200"></canvas>
+              <canvas id="rop-chart-agot" height="220"></canvas>
               <div class="rop-org-ref" id="rop-org-agot" style="display:none"></div>
             </div>
           </div>
@@ -1326,7 +1322,6 @@ tr:hover td { background: var(--bg); }
             </div>
             <div class="rop-chart-card">
               <div class="rop-chart-title">eNPS</div>
-              <div class="rop-chart-kpi" id="rop-kpi-enps"></div>
               <canvas id="rop-chart-enps" height="260"></canvas>
             </div>
           </div>
@@ -8419,11 +8414,6 @@ function ropRenderEng(rows, orgRows, compRows, medLabel, compLabel, showOrg) {
   const engOrg = showOrg ? ropCalcEng(orgRows) : null;
   const engComp = compRows ? ropCalcEng(compRows) : null;
 
-  const kpi = document.getElementById('rop-kpi-eng');
-  if (eng.avg != null) {
-    kpi.innerHTML = `${eng.avg.toFixed(2)}<span>${eng.pct != null ? eng.pct.toFixed(0)+'% alto engagement' : ''}</span>`;
-  } else { kpi.textContent = '—'; }
-
   const orgEl = document.getElementById('rop-org-eng');
   if (showOrg && engOrg && engOrg.avg != null) {
     orgEl.style.display = 'block';
@@ -8449,11 +8439,6 @@ function ropRenderAgot(rows, orgRows, compRows, medLabel, compLabel, showOrg) {
   const agot = ropCalcAgot(rows);
   const agotOrg = showOrg ? ropCalcAgot(orgRows) : null;
   const agotComp = compRows ? ropCalcAgot(compRows) : null;
-
-  const kpi = document.getElementById('rop-kpi-agot');
-  if (agot.avg != null) {
-    kpi.innerHTML = `${agot.avg.toFixed(2)}<span>${agot.pct != null ? agot.pct.toFixed(0)+'% alto agotamiento' : ''}</span>`;
-  } else { kpi.textContent = '—'; }
 
   const orgEl = document.getElementById('rop-org-agot');
   if (showOrg && agotOrg && agotOrg.avg != null) {
@@ -8505,13 +8490,6 @@ function ropRenderRD(rows, compRows, medLabel, compLabel) {
 function ropRenderENPS(rows, compRows, medLabel, compLabel) {
   const enps = ropCalcEnps(rows);
   const enpsComp = compRows ? ropCalcEnps(compRows) : null;
-
-  const kpi = document.getElementById('rop-kpi-enps');
-  if (enps) {
-    const sign = enps.score >= 0 ? '+' : '';
-    kpi.innerHTML = `${sign}${enps.score.toFixed(0)}<span>eNPS Score</span>`;
-    kpi.style.color = enps.score >= 0 ? 'var(--ok)' : 'var(--err)';
-  } else { kpi.textContent = '—'; kpi.style.color = ''; }
 
   if (!enps) { return; }
 
