@@ -8688,15 +8688,15 @@ const ropEnpsBadgePlugin = {
       const score = scores[i];
       if (score == null) return;
       const y = scales.y.getPixelForValue(i);
-      const x = chartArea.right + 30;
-      const r = 19;
+      const x = chartArea.right + 36;
+      const r = 22;
       ctx.save();
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI*2);
       ctx.fillStyle = '#111111';
       ctx.fill();
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 9px Inter,sans-serif';
+      ctx.font = 'bold 11px Inter,sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText((score>=0?'+':'')+Math.round(score), x, y);
@@ -8706,7 +8706,7 @@ const ropEnpsBadgePlugin = {
     ctx.fillStyle = '#555';
     ctx.font = 'bold 10px Inter,sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('eNPS', chartArea.right + 30, chartArea.bottom + 16);
+    ctx.fillText('eNPS', chartArea.right + 36, chartArea.bottom + 16);
     ctx.restore();
   }
 };
@@ -8908,20 +8908,15 @@ function ropRenderENPS(filterSets) {
   const validSets = filterSets.map(fs => ({ ...fs, enps: ropCalcEnps(fs.rows) })).filter(s => s.enps);
   if (!validSets.length) return;
 
-  const n = validSets.length;
-  const buildDs = (data, stackKey, idx) => {
-    const t = data.total;
-    const slot = (val) => { const a = new Array(n).fill(null); a[idx] = val; return a; };
-    return [
-      { label:'Detractores', data: slot(data.detr/t*100),   backgroundColor:'rgba(192,57,43,0.85)',  borderRadius:0 },
-      { label:'Neutros',     data: slot(data.neutro/t*100), backgroundColor:'rgba(251,192,45,0.85)', borderRadius:0 },
-      { label:'Promotores',  data: slot(data.promo/t*100),  backgroundColor:'rgba(39,174,96,0.85)',  borderRadius:0 }
-    ].map(ds => ({...ds, stack:stackKey, maxBarThickness:48}));
-  };
-
   const chartLabels = validSets.map(s => s.label);
-  const allDs = validSets.flatMap((s, i) => buildDs(s.enps, String(i), i));
   const scores = validSets.map(s => s.enps.score);
+
+  const pct = (key) => validSets.map(s => s.enps[key] / s.enps.total * 100);
+  const allDs = [
+    { label:'Detractores', data: pct('detr'),   backgroundColor:'rgba(192,57,43,0.85)',  borderRadius:0, stack:'all', maxBarThickness:48 },
+    { label:'Neutros',     data: pct('neutro'), backgroundColor:'rgba(251,192,45,0.85)', borderRadius:0, stack:'all', maxBarThickness:48 },
+    { label:'Promotores',  data: pct('promo'),  backgroundColor:'rgba(39,174,96,0.85)',  borderRadius:0, stack:'all', maxBarThickness:48 },
+  ];
 
   const cfg = new Chart(document.getElementById('rop-chart-enps'), {
     type:'bar',
@@ -8930,14 +8925,11 @@ function ropRenderENPS(filterSets) {
     options:{
       indexAxis:'y',
       responsive:true, maintainAspectRatio:false,
-      layout:{ padding:{ right:50, bottom:18 } },
+      layout:{ padding:{ right:60, bottom:18 } },
       plugins:{
         legend:{
           display:true, position:'bottom',
-          labels:{
-            font:{size:8}, boxWidth:9, padding:5,
-            filter: (item, data) => data.datasets.findIndex(d => d.label === item.text && d.stack === data.datasets[item.datasetIndex]?.stack) === item.datasetIndex
-          }
+          labels:{ font:{size:8}, boxWidth:9, padding:5 }
         },
         tooltip:{ callbacks:{ label: ctx => `${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1)}%` } }
       },
