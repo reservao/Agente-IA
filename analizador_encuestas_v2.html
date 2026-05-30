@@ -8597,7 +8597,91 @@ function ropGenerate() {
   document.getElementById('rop-preview').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
+const ROP_N_MIN = 5;
+
 // ── Inline Chart.js plugins ───────────────────────────────────────────────
+
+// Draws "Confidencial" / "Sin datos" overlays on bars with N < ROP_N_MIN or N = 0
+const ropConfidentialPlugin = {
+  id:'ropConfidential',
+  afterDraw(chart) {
+    const fm = chart.config._filterMeta;
+    if (!fm || fm.every(s => s === 'ok')) return;
+    const {ctx, chartArea} = chart;
+    const isHoriz = chart.config.options?.indexAxis === 'y';
+    const isRD    = !!chart.config._isRD;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+    ctx.clip();
+
+    fm.forEach((status, i) => {
+      if (status === 'ok') return;
+      const isNoData = status === 'nodata';
+      const line1 = isNoData ? 'Sin datos para' : 'Confidencial';
+      const line2 = isNoData ? 'la medición'   : '(N bajo mínimo)';
+
+      if (isRD) {
+        // RD: banner across full chart width for each affected dataset
+        const by = chartArea.top + i * 26 + 2;
+        const bw = chartArea.right - chartArea.left;
+        ctx.fillStyle = 'rgba(255,255,255,0.88)';
+        ctx.fillRect(chartArea.left, by, bw, 22);
+        ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+        ctx.strokeRect(chartArea.left, by, bw, 22);
+        const dsLabel = chart.data.datasets[i]?.label || '';
+        ctx.fillStyle = '#666';
+        ctx.font = 'italic 10px Inter,sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(`${dsLabel ? dsLabel + ': ' : ''}${line1} ${line2}`, chartArea.left + bw/2, by + 11);
+
+      } else if (isHoriz) {
+        // eNPS: overlay across full row
+        const firstMeta = chart.getDatasetMeta(0);
+        const barEl = firstMeta?.data[i];
+        if (!barEl) return;
+        const cy = barEl.y;
+        const rowH = firstMeta.data.length > 1
+          ? Math.abs((firstMeta.data[1]?.y ?? cy + 40) - cy) * 0.8
+          : 36;
+        const bh = Math.min(rowH, 36);
+        const bw = chartArea.right - chartArea.left - 16;
+        const bx = chartArea.left + 8;
+        ctx.fillStyle = 'rgba(255,255,255,0.88)';
+        ctx.fillRect(bx, cy - bh/2, bw, bh);
+        ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+        ctx.strokeRect(bx, cy - bh/2, bw, bh);
+        ctx.fillStyle = '#666';
+        ctx.font = 'italic 11px Inter,sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(`${line1} ${line2}`, bx + bw/2, cy);
+
+      } else {
+        // Vertical bars: overlay centred on that bar's x position
+        const firstMeta = chart.getDatasetMeta(0);
+        const barEl = firstMeta?.data[i];
+        if (!barEl) return;
+        const cx = barEl.x;
+        const barW = Math.max(56, Math.abs((firstMeta.data[1]?.x ?? cx + 60) - cx) * 0.82);
+        const bh = 40, bw = barW;
+        const bx = cx - bw/2;
+        const by = (chartArea.top + chartArea.bottom)/2 - bh/2;
+        ctx.fillStyle = 'rgba(255,255,255,0.88)';
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+        ctx.strokeRect(bx, by, bw, bh);
+        ctx.fillStyle = '#666';
+        ctx.font = 'italic 10px Inter,sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(line1, cx, by + 13);
+        ctx.fillText(line2, cx, by + 27);
+      }
+    });
+    ctx.restore();
+  }
+};
+
 // Draws value labels on top of vertical bars
 const ropRDValPlugin = {
   id:'ropRDVal',
@@ -8785,6 +8869,7 @@ function ropRenderEng(filterSets, showOrg) {
       (engOrg.pct != null ? `<span>% personas en Alto Engagement:</span><span class="rop-sum-pct">${engOrg.pct.toFixed(0)}%</span>` : '');
   } else { sumEl.style.display = 'none'; }
 
+  const filterMetaEng = filterSets.map(fs => fs.rows.length === 0 ? 'nodata' : fs.rows.length < ROP_N_MIN ? 'confidential' : 'ok');
   const labels = filterSets.map(fs => [fs.label, `N=${fs.rows.length}`]);
   const engVals = filterSets.map(fs => ropCalcEng(fs.rows));
 
@@ -8792,13 +8877,13 @@ function ropRenderEng(filterSets, showOrg) {
     type:'bar',
     data:{ labels, datasets:[{
       label:'Engagement',
-      data: engVals.map(e => e.avg),
+      data: engVals.map((e, i) => filterMetaEng[i] === 'ok' ? e.avg : null),
       backgroundColor: filterSets.map((_, i) => i === 0 ? 'rgba(27,63,110,0.85)' : 'rgba(170,170,170,0.65)'),
       borderRadius:5,
       maxBarThickness:72,
       _pcts: engVals.map(e => e.pct),
     }]},
-    plugins:[ropValLabelPlugin, ropPctBadgePlugin],
+    plugins:[ropValLabelPlugin, ropPctBadgePlugin, ropConfidentialPlugin],
     options:{
       responsive:true, maintainAspectRatio:false,
       layout:{ padding:{ top:18 } },
@@ -8812,6 +8897,7 @@ function ropRenderEng(filterSets, showOrg) {
       }
     }
   });
+  ROP.charts.eng.config._filterMeta = filterMetaEng;
 }
 
 function ropRenderAgot(filterSets, showOrg) {
@@ -8826,6 +8912,7 @@ function ropRenderAgot(filterSets, showOrg) {
       (agotOrg.pct != null ? `<span>% personas en Alto Agotamiento:</span><span class="rop-sum-pct" style="color:#f59e0b">${agotOrg.pct.toFixed(0)}%</span>` : '');
   } else { sumEl.style.display = 'none'; }
 
+  const filterMetaAgot = filterSets.map(fs => fs.rows.length === 0 ? 'nodata' : fs.rows.length < ROP_N_MIN ? 'confidential' : 'ok');
   const labels = filterSets.map(fs => [fs.label, `N=${fs.rows.length}`]);
   const agotVals = filterSets.map(fs => ropCalcAgot(fs.rows));
 
@@ -8833,13 +8920,13 @@ function ropRenderAgot(filterSets, showOrg) {
     type:'bar',
     data:{ labels, datasets:[{
       label:'Agotamiento',
-      data: agotVals.map(a => a.avg),
+      data: agotVals.map((a, i) => filterMetaAgot[i] === 'ok' ? a.avg : null),
       backgroundColor: filterSets.map((_, i) => i === 0 ? 'rgba(192,90,42,0.85)' : 'rgba(170,170,170,0.65)'),
       borderRadius:5,
       maxBarThickness:72,
       _pcts: agotVals.map(a => a.pct),
     }]},
-    plugins:[ropValLabelPlugin, ropPctBadgePlugin],
+    plugins:[ropValLabelPlugin, ropPctBadgePlugin, ropConfidentialPlugin],
     options:{
       responsive:true, maintainAspectRatio:false,
       layout:{ padding:{ top:18 } },
@@ -8853,6 +8940,7 @@ function ropRenderAgot(filterSets, showOrg) {
       }
     }
   });
+  ROP.charts.agot.config._filterMeta = filterMetaAgot;
 }
 
 // Returns the "optimal" subset: eng ≥ p75 AND agot ≤ p25 of the given rows
@@ -8918,13 +9006,15 @@ function ropRenderRD(filterSets) {
   const compGray = 'rgba(170,170,170,0.65)';
   const compAmber = 'rgba(232,115,58,0.65)';
 
+  const filterMetaRD = filterSets.map(fs => fs.rows.length === 0 ? 'nodata' : fs.rows.length < ROP_N_MIN ? 'confidential' : 'ok');
   const datasets = filterSets.map((fs, i) => {
     const bgColors = i === 0
       ? dimColors0.slice(0, dims.length)
       : dims.map(() => i === 1 ? compGray : compAmber);
+    const ok = filterMetaRD[i] === 'ok';
     return {
       label: fs.label,
-      data: dims.map(d => ropCalcDim(d.id, fs.rows)),
+      data: ok ? dims.map(d => ropCalcDim(d.id, fs.rows)) : dims.map(() => null),
       backgroundColor: bgColors,
       borderRadius:3,
     };
@@ -8954,7 +9044,7 @@ function ropRenderRD(filterSets) {
   ROP.charts.rd = new Chart(document.getElementById('rop-chart-rd'), {
     type:'bar',
     data:{ labels, datasets },
-    plugins:[ropRDValPlugin],
+    plugins:[ropRDValPlugin, ropConfidentialPlugin],
     options:{
       responsive:true, maintainAspectRatio:false,
       layout:{ padding:{ top:10 } },
@@ -8968,16 +9058,24 @@ function ropRenderRD(filterSets) {
       }
     }
   });
+  ROP.charts.rd.config._filterMeta = filterMetaRD;
+  ROP.charts.rd.config._isRD = true;
 }
 
 function ropRenderENPS(filterSets) {
-  const validSets = filterSets.map(fs => ({ ...fs, enps: ropCalcEnps(fs.rows) })).filter(s => s.enps);
-  if (!validSets.length) return;
+  // Include all filter sets; compute enps where possible
+  const allSets = filterSets.map(fs => ({ ...fs, enps: ropCalcEnps(fs.rows) }));
+  // Need at least one with enps data to render the chart at all
+  if (!allSets.some(s => s.enps)) return;
 
-  const chartLabels = validSets.map(s => s.label);
-  const scores = validSets.map(s => s.enps.score);
+  const filterMetaEnps = allSets.map(s =>
+    s.rows.length === 0 ? 'nodata' : s.rows.length < ROP_N_MIN ? 'confidential' : !s.enps ? 'nodata' : 'ok'
+  );
 
-  const pct = (key) => validSets.map(s => s.enps[key] / s.enps.total * 100);
+  const chartLabels = allSets.map(s => s.label);
+  const scores = allSets.map(s => s.enps?.score ?? null);
+
+  const pct = (key) => allSets.map((s, i) => filterMetaEnps[i] === 'ok' ? s.enps[key] / s.enps.total * 100 : null);
   const allDs = [
     { label:'Detractores', data: pct('detr'),   backgroundColor:'rgba(192,57,43,0.85)',  borderRadius:0, stack:'all', maxBarThickness:48 },
     { label:'Neutros',     data: pct('neutro'), backgroundColor:'rgba(251,192,45,0.85)', borderRadius:0, stack:'all', maxBarThickness:48 },
@@ -8987,7 +9085,7 @@ function ropRenderENPS(filterSets) {
   const cfg = new Chart(document.getElementById('rop-chart-enps'), {
     type:'bar',
     data:{ labels:chartLabels, datasets:allDs },
-    plugins:[ropEnpsSegLabels, ropEnpsBadgePlugin],
+    plugins:[ropEnpsSegLabels, ropEnpsBadgePlugin, ropConfidentialPlugin],
     options:{
       indexAxis:'y',
       responsive:true, maintainAspectRatio:false,
@@ -9006,6 +9104,7 @@ function ropRenderENPS(filterSets) {
     }
   });
   cfg.config._enpsScores = scores;
+  cfg.config._filterMeta = filterMetaEnps;
   ROP.charts.enps = cfg;
 }
 
