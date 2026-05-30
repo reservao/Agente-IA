@@ -8688,15 +8688,15 @@ const ropEnpsBadgePlugin = {
       const score = scores[i];
       if (score == null) return;
       const y = scales.y.getPixelForValue(i);
-      const x = chartArea.right + 36;
-      const r = 22;
+      const x = chartArea.right + 48;
+      const r = 44;
       ctx.save();
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI*2);
       ctx.fillStyle = '#111111';
       ctx.fill();
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 11px Inter,sans-serif';
+      ctx.font = 'bold 16px Inter,sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText((score>=0?'+':'')+Math.round(score), x, y);
@@ -8706,7 +8706,7 @@ const ropEnpsBadgePlugin = {
     ctx.fillStyle = '#555';
     ctx.font = 'bold 10px Inter,sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('eNPS', chartArea.right + 36, chartArea.bottom + 16);
+    ctx.fillText('eNPS', chartArea.right + 48, chartArea.bottom + 16);
     ctx.restore();
   }
 };
@@ -8925,7 +8925,7 @@ function ropRenderENPS(filterSets) {
     options:{
       indexAxis:'y',
       responsive:true, maintainAspectRatio:false,
-      layout:{ padding:{ right:60, bottom:18 } },
+      layout:{ padding:{ right:100, bottom:18 } },
       plugins:{
         legend:{
           display:true, position:'bottom',
