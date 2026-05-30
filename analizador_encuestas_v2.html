@@ -8607,11 +8607,33 @@ const ropConfidentialPlugin = {
   afterDraw(chart) {
     const fm = chart.config._filterMeta;
     if (!fm || fm.every(s => s === 'ok')) return;
-    const {ctx, chartArea} = chart;
+    const {ctx, chartArea, scales} = chart;
     const isHoriz = chart.config.options?.indexAxis === 'y';
     const isRD    = !!chart.config._isRD;
 
     ctx.save();
+
+    if (isRD) {
+      // Draw notes ABOVE chartArea (in the top-padding space) — no clip needed
+      let noteIdx = 0;
+      fm.forEach((status, i) => {
+        if (status === 'ok') return;
+        const isNoData = status === 'nodata';
+        const label = chart.data.datasets[i]?.label || '';
+        const text = `⚠ ${label}: ${isNoData ? 'Sin datos para la medición' : 'Confidencial (N bajo mínimo)'}`;
+        const noteY = chartArea.top - 14 - noteIdx * 18;
+        ctx.fillStyle = 'rgba(180,30,30,0.85)';
+        ctx.font = 'italic bold 10px Inter,sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, chartArea.left + 4, noteY);
+        noteIdx++;
+      });
+      ctx.restore();
+      return;
+    }
+
+    // Clip to chart area for bar overlays
     ctx.beginPath();
     ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
     ctx.clip();
@@ -8622,30 +8644,13 @@ const ropConfidentialPlugin = {
       const line1 = isNoData ? 'Sin datos para' : 'Confidencial';
       const line2 = isNoData ? 'la medición'   : '(N bajo mínimo)';
 
-      if (isRD) {
-        // RD: banner across full chart width for each affected dataset
-        const by = chartArea.top + i * 26 + 2;
-        const bw = chartArea.right - chartArea.left;
-        ctx.fillStyle = 'rgba(255,255,255,0.88)';
-        ctx.fillRect(chartArea.left, by, bw, 22);
-        ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
-        ctx.strokeRect(chartArea.left, by, bw, 22);
-        const dsLabel = chart.data.datasets[i]?.label || '';
-        ctx.fillStyle = '#666';
-        ctx.font = 'italic 10px Inter,sans-serif';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(`${dsLabel ? dsLabel + ': ' : ''}${line1} ${line2}`, chartArea.left + bw/2, by + 11);
-
-      } else if (isHoriz) {
-        // eNPS: overlay across full row
-        const firstMeta = chart.getDatasetMeta(0);
-        const barEl = firstMeta?.data[i];
-        if (!barEl) return;
-        const cy = barEl.y;
-        const rowH = firstMeta.data.length > 1
-          ? Math.abs((firstMeta.data[1]?.y ?? cy + 40) - cy) * 0.8
-          : 36;
-        const bh = Math.min(rowH, 36);
+      if (isHoriz) {
+        // eNPS: use Y scale directly (safe even when data is null)
+        const cy = scales.y?.getPixelForValue(i);
+        if (cy == null || isNaN(cy)) return;
+        const n = fm.length;
+        const rowH = n > 1 ? (chartArea.bottom - chartArea.top) / n * 0.8 : 36;
+        const bh = Math.max(24, Math.min(rowH, 36));
         const bw = chartArea.right - chartArea.left - 16;
         const bx = chartArea.left + 8;
         ctx.fillStyle = 'rgba(255,255,255,0.88)';
@@ -8658,13 +8663,13 @@ const ropConfidentialPlugin = {
         ctx.fillText(`${line1} ${line2}`, bx + bw/2, cy);
 
       } else {
-        // Vertical bars: overlay centred on that bar's x position
-        const firstMeta = chart.getDatasetMeta(0);
-        const barEl = firstMeta?.data[i];
-        if (!barEl) return;
-        const cx = barEl.x;
-        const barW = Math.max(56, Math.abs((firstMeta.data[1]?.x ?? cx + 60) - cx) * 0.82);
-        const bh = 40, bw = barW;
+        // Vertical bars: use X scale directly (safe even when data is null)
+        const cx = scales.x?.getPixelForValue(i);
+        if (cx == null || isNaN(cx)) return;
+        const n = fm.length;
+        const slotW = (chartArea.right - chartArea.left) / n;
+        const bw = Math.min(slotW * 0.75, 100);
+        const bh = 40;
         const bx = cx - bw/2;
         const by = (chartArea.top + chartArea.bottom)/2 - bh/2;
         ctx.fillStyle = 'rgba(255,255,255,0.88)';
@@ -9007,6 +9012,7 @@ function ropRenderRD(filterSets) {
   const compAmber = 'rgba(232,115,58,0.65)';
 
   const filterMetaRD = filterSets.map(fs => fs.rows.length === 0 ? 'nodata' : fs.rows.length < ROP_N_MIN ? 'confidential' : 'ok');
+  const rdNoteCount = filterMetaRD.filter(s => s !== 'ok').length;
   const datasets = filterSets.map((fs, i) => {
     const bgColors = i === 0
       ? dimColors0.slice(0, dims.length)
@@ -9047,7 +9053,7 @@ function ropRenderRD(filterSets) {
     plugins:[ropRDValPlugin, ropConfidentialPlugin],
     options:{
       responsive:true, maintainAspectRatio:false,
-      layout:{ padding:{ top:10 } },
+      layout:{ padding:{ top: 10 + rdNoteCount * 20 } },
       plugins:{
         legend:{ display:true, position:'top', labels:{font:{size:11}, boxWidth:10, padding:8} },
         tooltip:{ callbacks:{ label: ctx => ctx.parsed.y != null ? `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` : '—' } }
