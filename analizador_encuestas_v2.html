@@ -8433,25 +8433,46 @@ function ropRemoveFilter(i) {
 
 function ropSyncSegments() {
   if (ROP.filters.length < 2) return;
-  // Read current first-level values from DOM for filter 0
-  const clas0 = document.getElementById('rop-fc-clas-0-0')?.value || '';
-  const seg0 = document.getElementById('rop-fc-seg-0-0')?.value || '';
-  ROP.filters[0].clasificaciones[0] = { clascol: clas0, segmento: seg0 };
+
+  // Sync all DOM values of filter 0 into state first
+  const f0 = ROP.filters[0];
+  f0.medicion = document.getElementById('rop-fc-med-0')?.value ?? f0.medicion;
+  f0.clasificaciones.forEach((cls, li) => {
+    cls.clascol  = document.getElementById(`rop-fc-clas-0-${li}`)?.value ?? cls.clascol;
+    cls.segmento = document.getElementById(`rop-fc-seg-0-${li}`)?.value ?? cls.segmento;
+  });
 
   const warnings = [];
+
   for (let i = 1; i < ROP.filters.length; i++) {
-    ROP.filters[i].clasificaciones[0].clascol = clas0;
-    if (!clas0 || !seg0) { ROP.filters[i].clasificaciones[0].segmento = ''; continue; }
-    const available = ropGetSegmentosAtLevel(i, 0);
-    if (available.includes(seg0)) {
-      ROP.filters[i].clasificaciones[0].segmento = seg0;
-    } else {
-      ROP.filters[i].clasificaciones[0].segmento = '';
-      warnings.push(`Filtro ${i+1} (${ROP.filters[i].medicion}): el segmento "${seg0}" no existe — selecciona manualmente.`);
+    const fi = ROP.filters[i];
+    // Reset all levels, then rebuild level by level from filter 0
+    fi.clasificaciones = [];
+
+    for (let li = 0; li < f0.clasificaciones.length; li++) {
+      const { clascol, segmento } = f0.clasificaciones[li];
+
+      if (!clascol) break; // Nothing selected at this level — stop
+
+      fi.clasificaciones.push({ clascol, segmento: '' });
+
+      if (!segmento) break; // Clascol set but no segmento — leave empty, stop
+
+      // Check if this segmento exists at level li given the levels already set above
+      const available = ropGetSegmentosAtLevel(i, li);
+      if (available.includes(segmento)) {
+        fi.clasificaciones[li].segmento = segmento;
+      } else {
+        // Can't match — warn and stop (deeper levels would have no valid context)
+        warnings.push(`Filtro ${i+1} (${fi.medicion}), nivel ${li+1}: "${segmento}" no existe — selecciona manualmente.`);
+        break;
+      }
     }
-    // Clear sub-levels after sync
-    ROP.filters[i].clasificaciones = ROP.filters[i].clasificaciones.slice(0, 1);
+
+    // Ensure at least one empty level so the card renders
+    if (!fi.clasificaciones.length) fi.clasificaciones = [{ clascol: '', segmento: '' }];
   }
+
   ropRenderFilterCards();
   if (warnings.length) alert('Sincronización parcial:\n\n' + warnings.join('\n'));
 }
