@@ -8393,6 +8393,11 @@ function ropCasClasChange(fi, li) {
   const clas = document.getElementById(`rop-fc-clas-${fi}-${li}`).value;
   ROP.filters[fi].clasificaciones[li] = { clascol: clas, segmento: '' };
   ROP.filters[fi].clasificaciones = ROP.filters[fi].clasificaciones.slice(0, li + 1);
+  // Auto-select first available segmento so the button appears without extra click
+  if (clas) {
+    const segs = ropGetSegmentosAtLevel(fi, li);
+    if (segs.length) ROP.filters[fi].clasificaciones[li].segmento = segs[0];
+  }
   ropRenderFilterCards();
 }
 
