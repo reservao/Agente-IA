@@ -8577,15 +8577,15 @@ function ropGenerate() {
     const rows = ropFilterRows(ROP.rows, f.medicion, f.clasificaciones);
     const orgRows = ropFilterRows(ROP.rows, f.medicion, null);
     const segs = f.clasificaciones.filter(c => c.clascol && c.segmento).map(c => c.segmento);
-    const label = segs.length ? segs.join(' › ') : f.medicion;
-    return { rows, orgRows, label };
+    const titleLabel = segs.length ? segs.join(' › ') : f.medicion;
+    return { rows, orgRows, label: f.medicion, titleLabel };
   });
 
   if (!filterSets[0].rows.length) { alert('No hay datos para la selección base.'); return; }
 
-  const title = filterSets.map(fs => fs.label).join(' vs. ');
+  const title = filterSets.map(fs => fs.titleLabel).join(' vs. ');
   document.getElementById('rop-title-bar').textContent = title;
-  document.getElementById('rop-seg-title').textContent = filterSets[0].label;
+  document.getElementById('rop-seg-title').textContent = filterSets[0].titleLabel;
 
   Object.keys(ROP.charts).forEach(k => { if (ROP.charts[k]) { ROP.charts[k].destroy(); ROP.charts[k]=null; } });
 
