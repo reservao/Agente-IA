@@ -8241,7 +8241,7 @@ let ROP = {
   charts:{ eng:null, agot:null, rd:null, enps:null }
 };
 
-const ROP_RECURSOS = ['autoeficacia','oportunidades','coaching','retroalimentacion','colaboracion','autonomia','optimismo'];
+const ROP_RECURSOS = ['oportunidades','coaching','retroalimentacion','colaboracion','autonomia','optimismo','autoeficacia'];
 const ROP_DEMANDAS = ['presion','cognitivas','emocionales','conflictoderol','trabas'];
 
 function ropDrop(e) {
@@ -8785,22 +8785,22 @@ function ropRenderRD(filterSets) {
     const w = d.nombre.split(' ');
     return w.length > 2 ? [w.slice(0,Math.ceil(w.length/2)).join(' '), w.slice(Math.ceil(w.length/2)).join(' ')] : d.nombre;
   });
-  // Per-dimension colors matching the main RD chart (RD_COLORS equivalent)
-  // ROP_RECURSOS order: autoeficacia, oportunidades, coaching, retroalimentacion, colaboracion, autonomia, optimismo
-  // ROP_DEMANDAS order: presion, cognitivas, emocionales, conflictoderol, trabas
+  // Per-dimension colors — order must match ROP_RECURSOS + ROP_DEMANDAS (= RD_ORDER of main chart)
+  // ROP_RECURSOS: oportunidades, coaching, retroalimentacion, colaboracion, autonomia, optimismo, autoeficacia
+  // ROP_DEMANDAS: presion, cognitivas, emocionales, conflictoderol, trabas
   const dimColors0 = [
-    'rgba(27,63,110,0.85)',  // autoeficacia   (dark navy)
-    'rgba(33,150,243,0.85)', // oportunidades  (blue)
-    'rgba(33,150,243,0.85)', // coaching       (blue)
-    'rgba(33,150,243,0.85)', // retroalimentacion (blue)
-    'rgba(33,150,243,0.85)', // colaboracion   (blue)
-    'rgba(33,150,243,0.85)', // autonomia      (blue)
-    'rgba(27,63,110,0.85)',  // optimismo      (dark navy)
-    'rgba(239,108,0,0.85)',  // presion        (orange)
-    'rgba(239,108,0,0.85)',  // cognitivas     (orange)
-    'rgba(198,40,40,0.85)',  // emocionales    (red)
-    'rgba(198,40,40,0.85)',  // conflictoderol (red)
-    'rgba(198,40,40,0.85)',  // trabas         (red)
+    'rgba(33,150,243,0.85)', // oportunidades       (blue)
+    'rgba(33,150,243,0.85)', // coaching            (blue)
+    'rgba(33,150,243,0.85)', // retroalimentacion   (blue)
+    'rgba(33,150,243,0.85)', // colaboracion        (blue)
+    'rgba(33,150,243,0.85)', // autonomia           (blue)
+    'rgba(27,63,110,0.85)',  // optimismo           (dark navy)
+    'rgba(27,63,110,0.85)',  // autoeficacia        (dark navy)
+    'rgba(239,108,0,0.85)',  // presion             (orange)
+    'rgba(239,108,0,0.85)',  // cognitivas          (orange)
+    'rgba(198,40,40,0.85)',  // emocionales         (red)
+    'rgba(198,40,40,0.85)',  // conflictoderol      (red)
+    'rgba(198,40,40,0.85)',  // trabas              (red)
   ];
   // Comparison filters use gray (matches main chart secondary dataset)
   const compGray = 'rgba(170,170,170,0.65)';
