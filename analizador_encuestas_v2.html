@@ -8282,58 +8282,99 @@ function ropBuildFilters() {
     return vals.length >= 2 && vals.length <= 80;
   });
 
-  ROP.filters = [{ medicion: ROP.mediciones[0] || '', clascol: '', segmento: '' }];
+  ROP.filters = [{ medicion: ROP.mediciones[0] || '', clasificaciones: [{ clascol: '', segmento: '' }] }];
   ropRenderFilterCards();
 }
 
-function ropGetSegmentos(medicion, clascol) {
-  if (!clascol) return [];
-  const ci = ROP.headers.indexOf(clascol);
+// Returns rows filtered by medicion + all clasificaciones[0..upToLevel-1]
+function ropGetRowsUpToLevel(fi, upToLevel) {
+  const f = ROP.filters[fi];
   const medCol = detectMedicionCol(ROP.headers);
   let rows = ROP.rows;
-  if (medCol && medicion) {
+  if (medCol && f.medicion) {
     const mi = ROP.headers.indexOf(medCol);
-    rows = rows.filter(r => String(r[mi]).trim() === medicion);
+    rows = rows.filter(r => String(r[mi]).trim() === f.medicion);
   }
+  for (let i = 0; i < upToLevel; i++) {
+    const { clascol, segmento } = f.clasificaciones[i];
+    if (clascol && segmento) {
+      const ci = ROP.headers.indexOf(clascol);
+      rows = rows.filter(r => String(r[ci]).trim() === segmento);
+    }
+  }
+  return rows;
+}
+
+// Returns available segmentos for clasificacion level `li` within filter `fi`
+function ropGetSegmentosAtLevel(fi, li) {
+  const clascol = ROP.filters[fi].clasificaciones[li]?.clascol;
+  if (!clascol) return [];
+  const ci = ROP.headers.indexOf(clascol);
+  const rows = ropGetRowsUpToLevel(fi, li);
   return [...new Set(rows.map(r => String(r[ci]).trim()).filter(Boolean))].sort();
 }
 
 function ropRenderFilterCards() {
   const titles = ['BASE', 'COMPARATIVO 1', 'COMPARATIVO 2'];
+  const selStyle = 'font-size:12px;padding:3px 6px;width:100%;box-sizing:border-box';
   const container = document.getElementById('rop-filter-cards');
-  container.innerHTML = ROP.filters.map((f, i) => {
+
+  container.innerHTML = ROP.filters.map((f, fi) => {
     const medOpts = ROP.mediciones.map(m =>
       `<option value="${escHtml(m)}"${m===f.medicion?' selected':''}>${escHtml(m)}</option>`
     ).join('');
-    const clasOpts = `<option value=""${f.clascol===''?' selected':''}>— Toda la organización —</option>` +
-      ROP.clasCols.map(c =>
-        `<option value="${escHtml(c)}"${c===f.clascol?' selected':''}>${escHtml(c)}</option>`
-      ).join('');
-    const segs = ropGetSegmentos(f.medicion, f.clascol);
-    const segOpts = f.clascol
-      ? segs.map(s => `<option value="${escHtml(s)}"${s===f.segmento?' selected':''}>${escHtml(s)}</option>`).join('')
-      : `<option value="">Toda la organización</option>`;
-    const removeBtn = i > 0
-      ? `<button style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;color:#ef4444;padding:0" onclick="ropRemoveFilter(${i})" title="Eliminar">×</button>`
+    const removeCardBtn = fi > 0
+      ? `<button style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;color:#ef4444;padding:0" onclick="ropRemoveFilter(${fi})" title="Eliminar">×</button>`
       : '';
-    return `<div style="flex:1;min-width:200px;max-width:270px;width:270px;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius);padding:10px;background:#f8fafc;box-sizing:border-box">
+
+    // Build rows of clasificacion levels
+    const clasRows = f.clasificaciones.map((cls, li) => {
+      const usedCols = f.clasificaciones.slice(0, li).map(c => c.clascol).filter(Boolean);
+      const availCols = ROP.clasCols.filter(c => !usedCols.includes(c));
+      const clasOpts = `<option value=""${cls.clascol===''?' selected':''}>—</option>` +
+        availCols.map(c => `<option value="${escHtml(c)}"${c===cls.clascol?' selected':''}>${escHtml(c)}</option>`).join('');
+      const segs = ropGetSegmentosAtLevel(fi, li);
+      const segOpts = cls.clascol
+        ? segs.map(s => `<option value="${escHtml(s)}"${s===cls.segmento?' selected':''}>${escHtml(s)}</option>`).join('')
+        : `<option value="">—</option>`;
+      const removeRowBtn = li > 0
+        ? `<button style="background:none;border:none;cursor:pointer;font-size:13px;color:#ef4444;padding:0 2px;line-height:1;align-self:flex-end;margin-bottom:3px" onclick="ropRemoveClasLevel(${fi},${li})" title="Quitar nivel">×</button>`
+        : '';
+      const labelRow = li === 0
+        ? `<div style="display:flex;gap:4px;margin-bottom:2px">
+             <span style="flex:1;font-size:10px;font-weight:600;color:var(--text2)">Clasificación</span>
+             <span style="flex:1;font-size:10px;font-weight:600;color:var(--text2)">Segmento</span>
+           </div>`
+        : '';
+      return `${labelRow}<div style="display:flex;gap:4px;align-items:flex-end;margin-bottom:4px">
+        <div style="flex:1">
+          <select id="rop-fc-clas-${fi}-${li}" class="form-select" style="${selStyle}" onchange="ropCasClasChange(${fi},${li})">${clasOpts}</select>
+        </div>
+        <div style="flex:1">
+          <select id="rop-fc-seg-${fi}-${li}" class="form-select" style="${selStyle}" onchange="ropCasSegChange(${fi},${li})">${segOpts}</select>
+        </div>
+        ${removeRowBtn}
+      </div>`;
+    }).join('');
+
+    // Show "+ Subclasificación" only when last level has both clascol and segmento
+    const last = f.clasificaciones[f.clasificaciones.length - 1];
+    const addLevelBtn = (last.clascol && last.segmento)
+      ? `<button style="font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;padding:2px 0;margin-top:2px" onclick="ropAddClasLevel(${fi})">+ Subclasificación</button>`
+      : '';
+
+    return `<div style="flex:1;min-width:220px;max-width:300px;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius);padding:10px;background:#f8fafc;box-sizing:border-box">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-size:11px;font-weight:700;color:var(--accent)">${titles[i]}</span>
-        ${removeBtn}
+        <span style="font-size:11px;font-weight:700;color:var(--accent)">${titles[fi]}</span>
+        ${removeCardBtn}
       </div>
-      <div style="display:flex;flex-direction:column;gap:5px">
-        <div>
-          <label class="form-label" style="font-size:10px;margin-bottom:2px">Medición</label>
-          <select id="rop-fc-med-${i}" class="form-select" style="font-size:12px;padding:3px 6px;width:100%;box-sizing:border-box" onchange="ropCardChange(${i})">${medOpts}</select>
-        </div>
-        <div>
-          <label class="form-label" style="font-size:10px;margin-bottom:2px">Clasificación</label>
-          <select id="rop-fc-clas-${i}" class="form-select" style="font-size:12px;padding:3px 6px;width:100%;box-sizing:border-box" onchange="ropCardChange(${i})">${clasOpts}</select>
-        </div>
-        <div>
-          <label class="form-label" style="font-size:10px;margin-bottom:2px">Segmento</label>
-          <select id="rop-fc-seg-${i}" class="form-select" style="font-size:12px;padding:3px 6px;width:100%;box-sizing:border-box">${segOpts}</select>
-        </div>
+      <div style="margin-bottom:6px">
+        <label class="form-label" style="font-size:10px;margin-bottom:2px">Medición</label>
+        <select id="rop-fc-med-${fi}" class="form-select" style="${selStyle}" onchange="ropCardMedChange(${fi})">${medOpts}</select>
+      </div>
+      <div>
+        ${clasRows}
+        ${addLevelBtn}
       </div>
     </div>`;
   }).join('');
@@ -8342,19 +8383,35 @@ function ropRenderFilterCards() {
   document.getElementById('rop-btn-sync').style.display = ROP.filters.length > 1 ? '' : 'none';
 }
 
-function ropCardChange(i) {
-  const med = document.getElementById(`rop-fc-med-${i}`).value;
-  const clas = document.getElementById(`rop-fc-clas-${i}`).value;
-  ROP.filters[i].medicion = med;
-  ROP.filters[i].clascol = clas;
-  ROP.filters[i].segmento = '';
-  const selSeg = document.getElementById(`rop-fc-seg-${i}`);
-  if (!clas) {
-    selSeg.innerHTML = '<option value="">Toda la organización</option>';
-    return;
-  }
-  const segs = ropGetSegmentos(med, clas);
-  selSeg.innerHTML = segs.map(s => `<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('');
+function ropCardMedChange(fi) {
+  ROP.filters[fi].medicion = document.getElementById(`rop-fc-med-${fi}`).value;
+  ROP.filters[fi].clasificaciones = [{ clascol: '', segmento: '' }];
+  ropRenderFilterCards();
+}
+
+function ropCasClasChange(fi, li) {
+  const clas = document.getElementById(`rop-fc-clas-${fi}-${li}`).value;
+  ROP.filters[fi].clasificaciones[li] = { clascol: clas, segmento: '' };
+  ROP.filters[fi].clasificaciones = ROP.filters[fi].clasificaciones.slice(0, li + 1);
+  ropRenderFilterCards();
+}
+
+function ropCasSegChange(fi, li) {
+  const seg = document.getElementById(`rop-fc-seg-${fi}-${li}`).value;
+  ROP.filters[fi].clasificaciones[li].segmento = seg;
+  ROP.filters[fi].clasificaciones = ROP.filters[fi].clasificaciones.slice(0, li + 1);
+  ropRenderFilterCards();
+}
+
+function ropAddClasLevel(fi) {
+  ROP.filters[fi].clasificaciones.push({ clascol: '', segmento: '' });
+  ropRenderFilterCards();
+}
+
+function ropRemoveClasLevel(fi, li) {
+  if (li === 0) return;
+  ROP.filters[fi].clasificaciones.splice(li, 1);
+  ropRenderFilterCards();
 }
 
 function ropAddFilter() {
@@ -8362,7 +8419,9 @@ function ropAddFilter() {
   const f0 = ROP.filters[0];
   const nextMedIdx = (ROP.mediciones.indexOf(f0.medicion) + 1) % Math.max(ROP.mediciones.length, 1);
   const nextMed = ROP.mediciones[nextMedIdx] || f0.medicion;
-  ROP.filters.push({ medicion: nextMed, clascol: f0.clascol, segmento: '' });
+  // Copy first classification level structure (col only, clear segmento)
+  const newClas = [{ clascol: f0.clasificaciones[0].clascol, segmento: '' }];
+  ROP.filters.push({ medicion: nextMed, clasificaciones: newClas });
   ropRenderFilterCards();
 }
 
@@ -8374,36 +8433,42 @@ function ropRemoveFilter(i) {
 
 function ropSyncSegments() {
   if (ROP.filters.length < 2) return;
-  const clas = document.getElementById('rop-fc-clas-0').value;
-  const seg = document.getElementById('rop-fc-seg-0').value;
-  ROP.filters[0].clascol = clas;
-  ROP.filters[0].segmento = seg;
+  // Read current first-level values from DOM for filter 0
+  const clas0 = document.getElementById('rop-fc-clas-0-0')?.value || '';
+  const seg0 = document.getElementById('rop-fc-seg-0-0')?.value || '';
+  ROP.filters[0].clasificaciones[0] = { clascol: clas0, segmento: seg0 };
+
   const warnings = [];
   for (let i = 1; i < ROP.filters.length; i++) {
-    ROP.filters[i].clascol = clas;
-    if (!clas || !seg) { ROP.filters[i].segmento = ''; continue; }
-    const available = ropGetSegmentos(ROP.filters[i].medicion, clas);
-    if (available.includes(seg)) {
-      ROP.filters[i].segmento = seg;
+    ROP.filters[i].clasificaciones[0].clascol = clas0;
+    if (!clas0 || !seg0) { ROP.filters[i].clasificaciones[0].segmento = ''; continue; }
+    const available = ropGetSegmentosAtLevel(i, 0);
+    if (available.includes(seg0)) {
+      ROP.filters[i].clasificaciones[0].segmento = seg0;
     } else {
-      ROP.filters[i].segmento = '';
-      warnings.push(`Filtro ${i+1} (${ROP.filters[i].medicion}): el segmento "${seg}" no existe — selecciona manualmente.`);
+      ROP.filters[i].clasificaciones[0].segmento = '';
+      warnings.push(`Filtro ${i+1} (${ROP.filters[i].medicion}): el segmento "${seg0}" no existe — selecciona manualmente.`);
     }
+    // Clear sub-levels after sync
+    ROP.filters[i].clasificaciones = ROP.filters[i].clasificaciones.slice(0, 1);
   }
   ropRenderFilterCards();
   if (warnings.length) alert('Sincronización parcial:\n\n' + warnings.join('\n'));
 }
 
-function ropFilterRows(rows, medicion, clascol, segmento) {
+// Applies medicion + clasificaciones array filter to rows
+function ropFilterRows(rows, medicion, clasificaciones) {
   const medCol = detectMedicionCol(ROP.headers);
   let r = rows;
   if (medCol && medicion) {
     const mi = ROP.headers.indexOf(medCol);
     r = r.filter(row => String(row[mi]).trim() === medicion);
   }
-  if (clascol && segmento) {
-    const ci = ROP.headers.indexOf(clascol);
-    r = r.filter(row => String(row[ci]).trim() === segmento);
+  for (const { clascol, segmento } of (clasificaciones || [])) {
+    if (clascol && segmento) {
+      const ci = ROP.headers.indexOf(clascol);
+      r = r.filter(row => String(row[ci]).trim() === segmento);
+    }
   }
   return r;
 }
@@ -8474,16 +8539,19 @@ function ropGenerate() {
   const showOrg = document.getElementById('rop-show-org').checked;
 
   // Sync DOM values into state
-  ROP.filters.forEach((f, i) => {
-    f.medicion = document.getElementById(`rop-fc-med-${i}`)?.value ?? f.medicion;
-    f.clascol  = document.getElementById(`rop-fc-clas-${i}`)?.value ?? f.clascol;
-    f.segmento = document.getElementById(`rop-fc-seg-${i}`)?.value ?? f.segmento;
+  ROP.filters.forEach((f, fi) => {
+    f.medicion = document.getElementById(`rop-fc-med-${fi}`)?.value ?? f.medicion;
+    f.clasificaciones.forEach((cls, li) => {
+      cls.clascol  = document.getElementById(`rop-fc-clas-${fi}-${li}`)?.value ?? cls.clascol;
+      cls.segmento = document.getElementById(`rop-fc-seg-${fi}-${li}`)?.value ?? cls.segmento;
+    });
   });
 
   const filterSets = ROP.filters.map(f => {
-    const rows = ropFilterRows(ROP.rows, f.medicion, f.clascol, f.segmento);
-    const orgRows = ropFilterRows(ROP.rows, f.medicion, null, null);
-    const label = f.segmento ? `${f.segmento} (${f.medicion})` : f.medicion;
+    const rows = ropFilterRows(ROP.rows, f.medicion, f.clasificaciones);
+    const orgRows = ropFilterRows(ROP.rows, f.medicion, null);
+    const segs = f.clasificaciones.filter(c => c.clascol && c.segmento).map(c => c.segmento);
+    const label = segs.length ? `${segs.join(' › ')} (${f.medicion})` : f.medicion;
     return { rows, orgRows, label };
   });
 
@@ -8600,8 +8668,8 @@ const ropEnpsBadgePlugin = {
 };
 
 // N count per row (below x-axis) for Eng/Agot charts
-function ropGetN(rows, medicion, clascol, segmento) {
-  return ropFilterRows(rows, medicion, clascol, segmento).length;
+function ropGetN(rows, medicion, clasificaciones) {
+  return ropFilterRows(rows, medicion, clasificaciones).length;
 }
 
 function ropRenderEng(filterSets, showOrg) {
