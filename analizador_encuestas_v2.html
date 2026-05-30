@@ -8883,10 +8883,20 @@ function ropRenderRD(filterSets) {
   filterSets = filterSets.slice(0, 2);
   const dimIds = [...ROP_RECURSOS, ...ROP_DEMANDAS];
   const dims = dimIds.map(id => MAESTRO.find(d => d.id === id)).filter(Boolean);
-  const labels = dims.map(d => {
-    const w = d.nombre.split(' ');
-    return w.length > 2 ? [w.slice(0,Math.ceil(w.length/2)).join(' '), w.slice(Math.ceil(w.length/2)).join(' ')] : d.nombre;
-  });
+  const wrapLabel = (nombre, max = 12) => {
+    const words = nombre.split(' ');
+    if (words.length === 1) return nombre;
+    const lines = [];
+    let cur = '';
+    for (const w of words) {
+      const next = cur ? cur + ' ' + w : w;
+      if (next.length > max && cur) { lines.push(cur); cur = w; }
+      else cur = next;
+    }
+    if (cur) lines.push(cur);
+    return lines.length > 1 ? lines : nombre;
+  };
+  const labels = dims.map(d => wrapLabel(d.nombre));
   // Per-dimension colors — order must match ROP_RECURSOS + ROP_DEMANDAS (= RD_ORDER of main chart)
   // ROP_RECURSOS: oportunidades, coaching, retroalimentacion, colaboracion, autonomia, optimismo, autoeficacia
   // ROP_DEMANDAS: presion, cognitivas, emocionales, conflictoderol, trabas
@@ -8954,7 +8964,7 @@ function ropRenderRD(filterSets) {
       },
       scales:{
         y:{ min:1, max:5, ticks:{stepSize:1,font:{size:11}}, grid:{color:'rgba(0,0,0,.05)'} },
-        x:{ grid:{display:false}, ticks:{font:{size:9}, maxRotation:45} }
+        x:{ grid:{display:false}, ticks:{font:{size:9}, maxRotation:0, minRotation:0, autoSkip:false} }
       }
     }
   });
