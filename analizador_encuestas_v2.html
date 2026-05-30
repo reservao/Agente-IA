@@ -8908,17 +8908,19 @@ function ropRenderENPS(filterSets) {
   const validSets = filterSets.map(fs => ({ ...fs, enps: ropCalcEnps(fs.rows) })).filter(s => s.enps);
   if (!validSets.length) return;
 
-  const buildDs = (data, stackKey) => {
+  const n = validSets.length;
+  const buildDs = (data, stackKey, idx) => {
     const t = data.total;
+    const slot = (val) => { const a = new Array(n).fill(null); a[idx] = val; return a; };
     return [
-      { label:'Detractores', data:[data.detr/t*100],   backgroundColor:'rgba(192,57,43,0.85)',  borderRadius:0 },
-      { label:'Neutros',     data:[data.neutro/t*100], backgroundColor:'rgba(251,192,45,0.85)', borderRadius:0 },
-      { label:'Promotores',  data:[data.promo/t*100],  backgroundColor:'rgba(39,174,96,0.85)',  borderRadius:0 }
-    ].map(ds => ({...ds, stack:stackKey}));
+      { label:'Detractores', data: slot(data.detr/t*100),   backgroundColor:'rgba(192,57,43,0.85)',  borderRadius:0 },
+      { label:'Neutros',     data: slot(data.neutro/t*100), backgroundColor:'rgba(251,192,45,0.85)', borderRadius:0 },
+      { label:'Promotores',  data: slot(data.promo/t*100),  backgroundColor:'rgba(39,174,96,0.85)',  borderRadius:0 }
+    ].map(ds => ({...ds, stack:stackKey, maxBarThickness:48}));
   };
 
   const chartLabels = validSets.map(s => s.label);
-  const allDs = validSets.flatMap((s, i) => buildDs(s.enps, String(i)));
+  const allDs = validSets.flatMap((s, i) => buildDs(s.enps, String(i), i));
   const scores = validSets.map(s => s.enps.score);
 
   const cfg = new Chart(document.getElementById('rop-chart-enps'), {
