@@ -8379,7 +8379,7 @@ function ropRenderFilterCards() {
     </div>`;
   }).join('');
 
-  document.getElementById('rop-btn-add').style.display = ROP.filters.length < 3 ? '' : 'none';
+  document.getElementById('rop-btn-add').style.display = '';
   document.getElementById('rop-btn-sync').style.display = ROP.filters.length > 1 ? '' : 'none';
 }
 
@@ -8420,7 +8420,6 @@ function ropRemoveClasLevel(fi, li) {
 }
 
 function ropAddFilter() {
-  if (ROP.filters.length >= 3) return;
   const f0 = ROP.filters[0];
   const nextMedIdx = (ROP.mediciones.indexOf(f0.medicion) + 1) % Math.max(ROP.mediciones.length, 1);
   const nextMed = ROP.mediciones[nextMedIdx] || f0.medicion;
@@ -8753,7 +8752,7 @@ function ropRenderEng(filterSets, showOrg) {
       (engOrg.pct != null ? `<span>% personas en Alto Engagement:</span><span class="rop-sum-pct">${engOrg.pct.toFixed(0)}%</span>` : '');
   } else { sumEl.style.display = 'none'; }
 
-  const palette = ['rgba(27,63,110,0.85)','rgba(170,170,170,0.65)','rgba(232,115,58,0.85)'];
+  const palette = ['rgba(27,63,110,0.85)','rgba(170,170,170,0.65)','rgba(232,115,58,0.85)','rgba(142,68,173,0.85)','rgba(39,174,96,0.85)','rgba(41,128,185,0.85)','rgba(231,76,60,0.85)','rgba(243,156,18,0.85)'];
   const labels = filterSets.map(fs => [fs.label, `N=${fs.rows.length}`]);
   const engVals = filterSets.map(fs => ropCalcEng(fs.rows));
 
@@ -8795,7 +8794,7 @@ function ropRenderAgot(filterSets, showOrg) {
       (agotOrg.pct != null ? `<span>% personas en Alto Agotamiento:</span><span class="rop-sum-pct" style="color:#f59e0b">${agotOrg.pct.toFixed(0)}%</span>` : '');
   } else { sumEl.style.display = 'none'; }
 
-  const palette = ['rgba(192,90,42,0.85)','rgba(170,170,170,0.65)','rgba(232,115,58,0.85)'];
+  const palette = ['rgba(192,90,42,0.85)','rgba(170,170,170,0.65)','rgba(232,115,58,0.85)','rgba(142,68,173,0.85)','rgba(39,174,96,0.85)','rgba(41,128,185,0.85)','rgba(231,76,60,0.85)','rgba(243,156,18,0.85)'];
   const labels = filterSets.map(fs => [fs.label, `N=${fs.rows.length}`]);
   const agotVals = filterSets.map(fs => ropCalcAgot(fs.rows));
 
@@ -8849,6 +8848,8 @@ function ropGetOptimalRows(rows) {
 }
 
 function ropRenderRD(filterSets) {
+  // Only show base + first comparative to avoid chart collapse
+  filterSets = filterSets.slice(0, 2);
   const dimIds = [...ROP_RECURSOS, ...ROP_DEMANDAS];
   const dims = dimIds.map(id => MAESTRO.find(d => d.id === id)).filter(Boolean);
   const labels = dims.map(d => {
