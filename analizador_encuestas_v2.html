@@ -8577,7 +8577,7 @@ function ropGenerate() {
     const rows = ropFilterRows(ROP.rows, f.medicion, f.clasificaciones);
     const orgRows = ropFilterRows(ROP.rows, f.medicion, null);
     const segs = f.clasificaciones.filter(c => c.clascol && c.segmento).map(c => c.segmento);
-    const label = segs.length ? `${segs.join(' › ')} (${f.medicion})` : f.medicion;
+    const label = segs.length ? segs.join(' › ') : f.medicion;
     return { rows, orgRows, label };
   });
 
