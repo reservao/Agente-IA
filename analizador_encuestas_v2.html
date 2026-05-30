@@ -8623,11 +8623,14 @@ const ropValLabelPlugin = {
   }
 };
 
-// Draws circular % badges on vertical bars
+// Draws circular % badges on vertical bars.
+// Requires a hidden y2 scale (0–100) on the chart so the badge Y position
+// reflects the actual % value, matching the behaviour of the main charts.
 const ropPctBadgePlugin = {
   id:'ropPctBadge',
   afterDatasetsDraw(chart) {
     const {ctx} = chart;
+    const y2 = chart.scales.y2;
     chart.data.datasets.forEach((ds, di) => {
       if (!ds._pcts) return;
       const meta = chart.getDatasetMeta(di);
@@ -8635,24 +8638,39 @@ const ropPctBadgePlugin = {
       meta.data.forEach((bar, i) => {
         const pct = ds._pcts[i];
         if (pct == null) return;
-        const x = bar.x;
+        const x   = bar.x;
         const barH = Math.abs(bar.base - bar.y);
         if (barH < 24) return;
-        const y = bar.y + barH * 0.62;
-        const r = Math.min(14, barH * 0.28);
+        const r = Math.min(12, barH * 0.25);
+        // Position: use y2 scale when available so badge moves with pct value;
+        // otherwise fall back to fixed 62% of bar height
+        let y;
+        if (y2) {
+          const rawY = y2.getPixelForValue(pct);
+          y = Math.max(bar.y + r + 2, Math.min(rawY, bar.base - r - 2));
+        } else {
+          y = bar.y + barH * 0.62;
+        }
+        const bg = Array.isArray(ds.backgroundColor) ? ds.backgroundColor[i] : ds.backgroundColor;
         ctx.save();
+        // Halo
+        ctx.beginPath();
+        ctx.arc(x, y, r + 3, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(0,0,0,0.06)';
+        ctx.fill();
+        // Badge
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI*2);
         ctx.fillStyle = 'rgba(255,255,255,0.92)';
-        ctx.strokeStyle = typeof ds.backgroundColor==='string' ? ds.backgroundColor : '#aaa';
+        ctx.strokeStyle = typeof bg === 'string' ? bg : '#aaa';
         ctx.lineWidth = 1.5;
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = '#222';
-        ctx.font = `bold ${Math.max(7, Math.min(9, r-2))}px Inter,sans-serif`;
+        ctx.font = `bold ${Math.max(7, Math.min(9, r - 1))}px Inter,sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(Math.round(pct)+'%', x, y);
+        ctx.fillText(Math.round(pct) + '%', x, y);
         ctx.restore();
       });
     });
@@ -8732,6 +8750,7 @@ function ropRenderEng(filterSets, showOrg) {
         tooltip:{ callbacks:{ label: ctx => ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : '—' } } },
       scales:{
         y:{ min:0, max:6, ticks:{stepSize:1,font:{size:8}}, grid:{color:'rgba(0,0,0,.05)'} },
+        y2:{ display:false, position:'right', min:0, max:100 },
         x:{ grid:{display:false}, ticks:{font:{size:8}} }
       }
     }
@@ -8772,6 +8791,7 @@ function ropRenderAgot(filterSets, showOrg) {
         tooltip:{ callbacks:{ label: ctx => ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : '—' } } },
       scales:{
         y:{ min:0, max:4, ticks:{stepSize:1,font:{size:8}}, grid:{color:'rgba(0,0,0,.05)'} },
+        y2:{ display:false, position:'right', min:0, max:100 },
         x:{ grid:{display:false}, ticks:{font:{size:8}} }
       }
     }
