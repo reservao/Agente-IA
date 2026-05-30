@@ -8316,7 +8316,7 @@ function ropRenderFilterCards() {
     const removeBtn = i > 0
       ? `<button style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;color:#ef4444;padding:0" onclick="ropRemoveFilter(${i})" title="Eliminar">×</button>`
       : '';
-    return `<div style="flex:1;min-width:200px;max-width:270px;border:1px solid var(--border);border-radius:var(--radius);padding:10px;background:#f8fafc">
+    return `<div style="flex:1;min-width:200px;max-width:270px;width:270px;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius);padding:10px;background:#f8fafc;box-sizing:border-box">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <span style="font-size:11px;font-weight:700;color:var(--accent)">${titles[i]}</span>
         ${removeBtn}
@@ -8324,15 +8324,15 @@ function ropRenderFilterCards() {
       <div style="display:flex;flex-direction:column;gap:5px">
         <div>
           <label class="form-label" style="font-size:10px;margin-bottom:2px">Medición</label>
-          <select id="rop-fc-med-${i}" class="form-select" style="font-size:12px;padding:3px 6px" onchange="ropCardChange(${i})">${medOpts}</select>
+          <select id="rop-fc-med-${i}" class="form-select" style="font-size:12px;padding:3px 6px;width:100%;box-sizing:border-box" onchange="ropCardChange(${i})">${medOpts}</select>
         </div>
         <div>
           <label class="form-label" style="font-size:10px;margin-bottom:2px">Clasificación</label>
-          <select id="rop-fc-clas-${i}" class="form-select" style="font-size:12px;padding:3px 6px" onchange="ropCardChange(${i})">${clasOpts}</select>
+          <select id="rop-fc-clas-${i}" class="form-select" style="font-size:12px;padding:3px 6px;width:100%;box-sizing:border-box" onchange="ropCardChange(${i})">${clasOpts}</select>
         </div>
         <div>
           <label class="form-label" style="font-size:10px;margin-bottom:2px">Segmento</label>
-          <select id="rop-fc-seg-${i}" class="form-select" style="font-size:12px;padding:3px 6px">${segOpts}</select>
+          <select id="rop-fc-seg-${i}" class="form-select" style="font-size:12px;padding:3px 6px;width:100%;box-sizing:border-box">${segOpts}</select>
         </div>
       </div>
     </div>`;
