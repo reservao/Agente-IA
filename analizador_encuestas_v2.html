@@ -8614,19 +8614,19 @@ const ropConfidentialPlugin = {
     ctx.save();
 
     if (isRD) {
-      // Draw notes ABOVE chartArea (in the top-padding space) — no clip needed
+      // Draw notes BELOW the chart (bottom padding area) — no clip needed
       let noteIdx = 0;
       fm.forEach((status, i) => {
         if (status === 'ok') return;
         const isNoData = status === 'nodata';
         const label = chart.data.datasets[i]?.label || '';
         const text = `⚠ ${label}: ${isNoData ? 'Sin datos para la medición' : 'Confidencial (N bajo mínimo)'}`;
-        const noteY = chartArea.top - 14 - noteIdx * 18;
-        ctx.fillStyle = 'rgba(180,30,30,0.85)';
+        const noteY = chart.height - 6 - noteIdx * 18;
+        ctx.fillStyle = 'rgba(180,30,30,0.9)';
         ctx.font = 'italic bold 10px Inter,sans-serif';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(text, chartArea.left + 4, noteY);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(text, chart.width / 2, noteY);
         noteIdx++;
       });
       ctx.restore();
@@ -9053,7 +9053,7 @@ function ropRenderRD(filterSets) {
     plugins:[ropRDValPlugin, ropConfidentialPlugin],
     options:{
       responsive:true, maintainAspectRatio:false,
-      layout:{ padding:{ top: 10 + rdNoteCount * 20 } },
+      layout:{ padding:{ top: 10, bottom: rdNoteCount * 22 } },
       plugins:{
         legend:{ display:true, position:'top', labels:{font:{size:11}, boxWidth:10, padding:8} },
         tooltip:{ callbacks:{ label: ctx => ctx.parsed.y != null ? `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` : '—' } }
