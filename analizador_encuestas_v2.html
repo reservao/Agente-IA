@@ -8710,7 +8710,7 @@ function ropRenderEng(filterSets, showOrg) {
       (engOrg.pct != null ? `<span>% personas en Alto Engagement:</span><span class="rop-sum-pct">${engOrg.pct.toFixed(0)}%</span>` : '');
   } else { sumEl.style.display = 'none'; }
 
-  const palette = ['rgba(79,140,255,0.82)','rgba(160,160,160,0.75)','rgba(250,160,60,0.82)'];
+  const palette = ['rgba(27,63,110,0.85)','rgba(170,170,170,0.65)','rgba(232,115,58,0.85)'];
   const labels = filterSets.map(fs => [fs.label, `N=${fs.rows.length}`]);
   const engVals = filterSets.map(fs => ropCalcEng(fs.rows));
 
@@ -8750,7 +8750,7 @@ function ropRenderAgot(filterSets, showOrg) {
       (agotOrg.pct != null ? `<span>% personas en Alto Agotamiento:</span><span class="rop-sum-pct" style="color:#f59e0b">${agotOrg.pct.toFixed(0)}%</span>` : '');
   } else { sumEl.style.display = 'none'; }
 
-  const palette = ['rgba(248,113,113,0.82)','rgba(160,160,160,0.75)','rgba(250,160,60,0.82)'];
+  const palette = ['rgba(192,90,42,0.85)','rgba(170,170,170,0.65)','rgba(232,115,58,0.85)'];
   const labels = filterSets.map(fs => [fs.label, `N=${fs.rows.length}`]);
   const agotVals = filterSets.map(fs => ropCalcAgot(fs.rows));
 
@@ -8785,19 +8785,35 @@ function ropRenderRD(filterSets) {
     const w = d.nombre.split(' ');
     return w.length > 2 ? [w.slice(0,Math.ceil(w.length/2)).join(' '), w.slice(Math.ceil(w.length/2)).join(' ')] : d.nombre;
   });
-  const rCount = ROP_RECURSOS.length;
-  const colorSets = [
-    { r:'rgba(59,130,246,0.85)',  d:'rgba(239,68,68,0.85)' },
-    { r:'rgba(147,197,253,0.75)', d:'rgba(252,165,165,0.75)' },
-    { r:'rgba(250,190,60,0.82)',  d:'rgba(255,140,60,0.75)' },
+  // Per-dimension colors matching the main RD chart (RD_COLORS equivalent)
+  // ROP_RECURSOS order: autoeficacia, oportunidades, coaching, retroalimentacion, colaboracion, autonomia, optimismo
+  // ROP_DEMANDAS order: presion, cognitivas, emocionales, conflictoderol, trabas
+  const dimColors0 = [
+    'rgba(27,63,110,0.85)',  // autoeficacia   (dark navy)
+    'rgba(33,150,243,0.85)', // oportunidades  (blue)
+    'rgba(33,150,243,0.85)', // coaching       (blue)
+    'rgba(33,150,243,0.85)', // retroalimentacion (blue)
+    'rgba(33,150,243,0.85)', // colaboracion   (blue)
+    'rgba(33,150,243,0.85)', // autonomia      (blue)
+    'rgba(27,63,110,0.85)',  // optimismo      (dark navy)
+    'rgba(239,108,0,0.85)',  // presion        (orange)
+    'rgba(239,108,0,0.85)',  // cognitivas     (orange)
+    'rgba(198,40,40,0.85)',  // emocionales    (red)
+    'rgba(198,40,40,0.85)',  // conflictoderol (red)
+    'rgba(198,40,40,0.85)',  // trabas         (red)
   ];
+  // Comparison filters use gray (matches main chart secondary dataset)
+  const compGray = 'rgba(170,170,170,0.65)';
+  const compAmber = 'rgba(232,115,58,0.65)';
 
   const datasets = filterSets.map((fs, i) => {
-    const c = colorSets[i] || colorSets[0];
+    const bgColors = i === 0
+      ? dimColors0.slice(0, dims.length)
+      : dims.map(() => i === 1 ? compGray : compAmber);
     return {
       label: fs.label,
       data: dims.map(d => ropCalcDim(d.id, fs.rows)),
-      backgroundColor: dims.map((_, j) => j < rCount ? c.r : c.d),
+      backgroundColor: bgColors,
       borderRadius:3,
     };
   });
@@ -8838,9 +8854,9 @@ function ropRenderENPS(filterSets) {
   const buildDs = (data, stackKey) => {
     const t = data.total;
     return [
-      { label:'Detractores', data:[data.detr/t*100],   backgroundColor:'#374151', borderRadius:0 },
-      { label:'Neutros',     data:[data.neutro/t*100], backgroundColor:'#fbbf24', borderRadius:0 },
-      { label:'Promotores',  data:[data.promo/t*100],  backgroundColor:'#22c55e', borderRadius:0 }
+      { label:'Detractores', data:[data.detr/t*100],   backgroundColor:'rgba(192,57,43,0.85)',  borderRadius:0 },
+      { label:'Neutros',     data:[data.neutro/t*100], backgroundColor:'rgba(251,192,45,0.85)', borderRadius:0 },
+      { label:'Promotores',  data:[data.promo/t*100],  backgroundColor:'rgba(39,174,96,0.85)',  borderRadius:0 }
     ].map(ds => ({...ds, stack:stackKey}));
   };
 
