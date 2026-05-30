@@ -1304,44 +1304,53 @@ tr:hover td { background: var(--bg); }
           <div id="rop-title-bar" style="font-size:15px;font-weight:700;color:var(--text1)"></div>
           <button class="btn btn-secondary" style="font-size:12px" onclick="ropDownloadPNG()">⬇ Descargar PNG</button>
         </div>
-        <!-- Contenedor capturable -->
-        <div id="rop-canvas-wrap" style="background:#fff;padding:24px 24px 32px;border-radius:var(--radius);border:1px solid var(--border)">
-          <!-- Título segmento -->
-          <div id="rop-seg-title" style="font-size:17px;font-weight:800;color:var(--accent);margin-bottom:18px"></div>
-          <!-- 2 columnas: izq=Eng+Agot | der=R&D+eNPS -->
-          <div style="display:grid;grid-template-columns:35fr 65fr;gap:20px;align-items:start">
-            <!-- COLUMNA IZQUIERDA -->
-            <div style="display:flex;flex-direction:column;gap:14px">
-              <!-- Engagement -->
-              <div class="rop-chart-card">
-                <div style="display:flex;gap:4px;align-items:stretch">
-                  <div class="rop-axis-label">ENGAGEMENT-SENTIDO PERTENENCIA</div>
-                  <div style="flex:1"><canvas id="rop-chart-eng" height="165"></canvas></div>
-                </div>
-                <div class="rop-summary-row" id="rop-sum-eng" style="display:none"></div>
-              </div>
-              <!-- Agotamiento -->
-              <div class="rop-chart-card">
-                <div style="display:flex;gap:4px;align-items:stretch">
-                  <div class="rop-axis-label">AGOTAMIENTO</div>
-                  <div style="flex:1"><canvas id="rop-chart-agot" height="165"></canvas></div>
-                </div>
-                <div class="rop-summary-row" id="rop-sum-agot" style="display:none"></div>
-              </div>
-            </div>
-            <!-- COLUMNA DERECHA -->
-            <div style="display:flex;flex-direction:column;gap:14px">
-              <!-- Recursos & Demandas -->
-              <div class="rop-chart-card" style="padding-top:0">
-                <div class="rop-rd-header">RECURSOS Y DEMANDAS</div>
-                <canvas id="rop-chart-rd" height="210" style="margin-top:10px"></canvas>
-              </div>
-              <!-- eNPS -->
-              <div class="rop-chart-card" style="padding-right:56px">
-                <canvas id="rop-chart-enps" height="110"></canvas>
-              </div>
-            </div>
+        <!-- Contenedor capturable — grid 20×10 proporcional -->
+        <div id="rop-canvas-wrap" style="position:relative;width:100%;aspect-ratio:2/1;background:#fff;border-radius:var(--radius);border:1px solid var(--border);overflow:visible;min-height:400px">
+
+          <!-- Fila 1 (0–10%): Título -->
+          <div style="position:absolute;left:0;right:0;top:0;height:10%;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid #e5e7eb;background:#f8fafc;border-radius:var(--radius) var(--radius) 0 0">
+            <div id="rop-seg-title" style="font-size:14px;font-weight:800;color:var(--accent)"></div>
           </div>
+
+          <!-- ENGAGEMENT -->
+          <!-- Label vertical: col ½ (0–2.5%), filas 2–5 (10–50%) -->
+          <div style="position:absolute;left:0;width:2.5%;top:10%;height:40%;background:#dbeafe;border:1px solid #3b82f6;display:flex;align-items:center;justify-content:center;overflow:hidden">
+            <span style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:8px;font-weight:700;color:#1d4ed8;letter-spacing:.06em;white-space:nowrap">ENGAGEMENT</span>
+          </div>
+          <!-- Gráfico: cols 2–7 (5–35%), filas 2–4 (10–40%) -->
+          <div style="position:absolute;left:5%;width:30%;top:10%;height:30%">
+            <canvas id="rop-chart-eng" style="width:100%;height:100%"></canvas>
+          </div>
+          <!-- Resumen: cols 2–7, fila 5 (40–50%) -->
+          <div id="rop-sum-eng" class="rop-summary-row" style="position:absolute;left:5%;width:30%;top:40%;height:10%;display:none;margin:0;border-radius:0;border-top:1px solid #d1fae5;border-left:none;border-right:none;border-bottom:none;padding:0 8px"></div>
+
+          <!-- AGOTAMIENTO -->
+          <!-- Label vertical: col ½ (0–2.5%), filas 7–10 (60–100%) -->
+          <div style="position:absolute;left:0;width:2.5%;top:60%;height:40%;background:#ffe4e6;border:1px solid #f87171;display:flex;align-items:center;justify-content:center;overflow:hidden">
+            <span style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:8px;font-weight:700;color:#dc2626;letter-spacing:.06em;white-space:nowrap">AGOTAMIENTO</span>
+          </div>
+          <!-- Gráfico: cols 2–7 (5–35%), filas 7–9 (60–90%) -->
+          <div style="position:absolute;left:5%;width:30%;top:60%;height:30%">
+            <canvas id="rop-chart-agot" style="width:100%;height:100%"></canvas>
+          </div>
+          <!-- Resumen: cols 2–7, fila 10 (90–100%) -->
+          <div id="rop-sum-agot" class="rop-summary-row" style="position:absolute;left:5%;width:30%;top:90%;height:10%;display:none;margin:0;border-radius:0;border-top:1px solid #fef3c7;border-left:none;border-right:none;border-bottom:none;padding:0 8px"></div>
+
+          <!-- RECURSOS Y DEMANDAS -->
+          <!-- Header: cols 9–20 (40–100%), filas 2–2.5 (10–15%) -->
+          <div style="position:absolute;left:40%;width:60%;top:10%;height:5%;background:#1e293b;display:flex;align-items:center;justify-content:center">
+            <span style="font-size:10px;font-weight:700;color:#fff;letter-spacing:.08em">RECURSOS Y DEMANDAS</span>
+          </div>
+          <!-- Gráfico: cols 9–20 (40–100%), filas 2.5–5 (15–50%) -->
+          <div style="position:absolute;left:40%;width:60%;top:15%;height:35%">
+            <canvas id="rop-chart-rd" style="width:100%;height:100%"></canvas>
+          </div>
+
+          <!-- eNPS: cols 11–19 (50–95%), filas 7–10 (60–100%) -->
+          <div style="position:absolute;left:50%;width:45%;top:60%;height:40%;overflow:visible">
+            <canvas id="rop-chart-enps" style="width:100%;height:100%"></canvas>
+          </div>
+
         </div>
       </div>
     </div><!-- /r-sub-onepage -->
@@ -8561,14 +8570,14 @@ function ropRenderEng(rows, orgRows, compRows, medLabel, compLabel, showOrg) {
     data:{ labels, datasets: ds },
     plugins:[ropValLabelPlugin, ropPctBadgePlugin],
     options:{
-      responsive:true,
+      responsive:true, maintainAspectRatio:false,
       layout:{ padding:{ top:18 } },
       _valLabels:true,
-      plugins:{ legend:{display:!!compRows, labels:{font:{size:10}}},
+      plugins:{ legend:{display:!!compRows, labels:{font:{size:9}}},
         tooltip:{ callbacks:{ label: ctx => ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : '—' } } },
       scales:{
-        y:{ min:0, max:6, ticks:{stepSize:1,font:{size:9}}, grid:{color:'rgba(0,0,0,.05)'} },
-        x:{ grid:{display:false}, ticks:{font:{size:9}} }
+        y:{ min:0, max:6, ticks:{stepSize:1,font:{size:8}}, grid:{color:'rgba(0,0,0,.05)'} },
+        x:{ grid:{display:false}, ticks:{font:{size:8}} }
       }
     }
   });
@@ -8603,14 +8612,14 @@ function ropRenderAgot(rows, orgRows, compRows, medLabel, compLabel, showOrg) {
     data:{ labels, datasets:ds },
     plugins:[ropValLabelPlugin, ropPctBadgePlugin],
     options:{
-      responsive:true,
+      responsive:true, maintainAspectRatio:false,
       layout:{ padding:{ top:18 } },
       _valLabels:true,
-      plugins:{ legend:{display:!!compRows, labels:{font:{size:10}}},
+      plugins:{ legend:{display:!!compRows, labels:{font:{size:9}}},
         tooltip:{ callbacks:{ label: ctx => ctx.parsed.y != null ? ctx.parsed.y.toFixed(2) : '—' } } },
       scales:{
-        y:{ min:0, max:4, ticks:{stepSize:1,font:{size:9}}, grid:{color:'rgba(0,0,0,.05)'} },
-        x:{ grid:{display:false}, ticks:{font:{size:9}} }
+        y:{ min:0, max:4, ticks:{stepSize:1,font:{size:8}}, grid:{color:'rgba(0,0,0,.05)'} },
+        x:{ grid:{display:false}, ticks:{font:{size:8}} }
       }
     }
   });
@@ -8640,16 +8649,16 @@ function ropRenderRD(rows, orgRows, compRows, medLabel, compLabel) {
     data:{ labels, datasets },
     plugins:[ropValLabelPlugin],
     options:{
-      responsive:true,
+      responsive:true, maintainAspectRatio:false,
       layout:{ padding:{ top:20 } },
       _valLabels:true,
       plugins:{
-        legend:{ display:true, position:'top', labels:{font:{size:9}, boxWidth:10, padding:8} },
+        legend:{ display:true, position:'top', labels:{font:{size:8}, boxWidth:9, padding:6} },
         tooltip:{ callbacks:{ label: ctx => ctx.parsed.y != null ? `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` : '—' } }
       },
       scales:{
-        y:{ min:1, max:5, ticks:{stepSize:1,font:{size:9}}, grid:{color:'rgba(0,0,0,.05)'} },
-        x:{ grid:{display:false}, ticks:{font:{size:8}, maxRotation:45} }
+        y:{ min:1, max:5, ticks:{stepSize:1,font:{size:8}}, grid:{color:'rgba(0,0,0,.05)'} },
+        x:{ grid:{display:false}, ticks:{font:{size:7}, maxRotation:45} }
       }
     }
   });
@@ -8680,15 +8689,15 @@ function ropRenderENPS(rows, compRows, medLabel, compLabel) {
     plugins:[ropEnpsBadgePlugin],
     options:{
       indexAxis:'y',
-      responsive:true,
-      layout:{ padding:{ right:56, bottom:20 } },
+      responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{ right:50, bottom:18 } },
       plugins:{
-        legend:{ display:true, position:'bottom', labels:{font:{size:9}, boxWidth:10, padding:6} },
+        legend:{ display:true, position:'bottom', labels:{font:{size:8}, boxWidth:9, padding:5} },
         tooltip:{ callbacks:{ label: ctx => `${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1)}%` } }
       },
       scales:{
-        x:{ stacked:true, min:0, max:100, ticks:{callback:v=>v+'%', font:{size:9}}, grid:{color:'rgba(0,0,0,.05)'} },
-        y:{ stacked:true, ticks:{font:{size:9}} }
+        x:{ stacked:true, min:0, max:100, ticks:{callback:v=>v+'%', font:{size:8}}, grid:{color:'rgba(0,0,0,.05)'} },
+        y:{ stacked:true, ticks:{font:{size:8}} }
       }
     }
   });
