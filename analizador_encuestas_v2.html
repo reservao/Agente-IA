@@ -8678,6 +8678,31 @@ const ropPctBadgePlugin = {
 };
 
 // Draws eNPS score circles to the right of horizontal stacked bars
+const ropEnpsSegLabels = {
+  id:'ropEnpsSegLabels',
+  afterDatasetsDraw(chart) {
+    const ctx = chart.ctx;
+    chart.data.datasets.forEach((ds, di) => {
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      meta.data.forEach((bar, i) => {
+        const v = ds.data[i];
+        if (v == null) return;
+        const barW = Math.abs(bar.x - bar.base);
+        if (barW < 24) return;
+        const txt = v < 10 ? (+v).toFixed(1)+'%' : Math.round(+v)+'%';
+        ctx.save();
+        ctx.font = '600 10px Inter,sans-serif';
+        ctx.fillStyle = '#1a1a1a';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(txt, (bar.base + bar.x) / 2, bar.y);
+        ctx.restore();
+      });
+    });
+  }
+};
+
 const ropEnpsBadgePlugin = {
   id:'ropEnpsBadge',
   afterDraw(chart) {
@@ -8921,7 +8946,7 @@ function ropRenderENPS(filterSets) {
   const cfg = new Chart(document.getElementById('rop-chart-enps'), {
     type:'bar',
     data:{ labels:chartLabels, datasets:allDs },
-    plugins:[ropEnpsBadgePlugin],
+    plugins:[ropEnpsSegLabels, ropEnpsBadgePlugin],
     options:{
       indexAxis:'y',
       responsive:true, maintainAspectRatio:false,
