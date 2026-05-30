@@ -8778,6 +8778,29 @@ function ropRenderAgot(filterSets, showOrg) {
   });
 }
 
+// Returns the "optimal" subset: eng ≥ p75 AND agot ≤ p25 of the given rows
+function ropGetOptimalRows(rows) {
+  const engDim  = MAESTRO.find(d => d.id === 'engagement');
+  const agotDim = MAESTRO.find(d => d.id === 'agotamiento');
+  if (!engDim || !agotDim) return null;
+  const engCols  = engDim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  const agotCols = agotDim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  if (!engCols.length || !agotCols.length) return null;
+  const scored = rows.map(r => {
+    const eVs = engCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
+    const aVs = agotCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
+    const eng  = eVs.length  ? eVs.reduce((a,b)=>a+b,0)/eVs.length  : null;
+    const agot = aVs.length  ? aVs.reduce((a,b)=>a+b,0)/aVs.length : null;
+    return { r, eng, agot };
+  }).filter(x => x.eng !== null && x.agot !== null);
+  if (!scored.length) return null;
+  const eVals = scored.map(x => x.eng).sort((a,b)=>a-b);
+  const aVals = scored.map(x => x.agot).sort((a,b)=>a-b);
+  const p75e = calcPercentile(eVals, 75);
+  const p25a = calcPercentile(aVals, 25);
+  return scored.filter(x => x.eng >= p75e && x.agot <= p25a).map(x => x.r);
+}
+
 function ropRenderRD(filterSets) {
   const dimIds = [...ROP_RECURSOS, ...ROP_DEMANDAS];
   const dims = dimIds.map(id => MAESTRO.find(d => d.id === id)).filter(Boolean);
@@ -8826,6 +8849,18 @@ function ropRenderRD(filterSets) {
     borderDash:[5,3], pointRadius:3, pointBackgroundColor:'#6b7280',
     fill:false, tension:0.1
   });
+
+  // Óptimo Organizacional: eng ≥ p75 AND agot ≤ p25 (green dashed line)
+  const optRows = ropGetOptimalRows(filterSets[0].orgRows);
+  if (optRows && optRows.length > 0) {
+    datasets.push({
+      label:'Óptimo Organizacional',
+      data: dims.map(d => ropCalcDim(d.id, optRows)),
+      type:'line', borderColor:'#27AE60', borderWidth:2,
+      borderDash:[5,3], pointRadius:3, pointBackgroundColor:'#27AE60',
+      fill:false, tension:0.1
+    });
+  }
 
   ROP.charts.rd = new Chart(document.getElementById('rop-chart-rd'), {
     type:'bar',
