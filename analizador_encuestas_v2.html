@@ -290,10 +290,10 @@ tr:hover td { background: var(--bg); }
 .rop-chart-title { font-size:13px; font-weight:700; color:var(--text1); margin-bottom:8px; letter-spacing:.02em; text-transform:uppercase; }
 .rop-rd-header { background:#222; color:#fff; font-size:12px; font-weight:700; letter-spacing:.06em; text-align:center; padding:7px 14px; margin:-14px -14px 0; border-radius:var(--radius) var(--radius) 0 0; }
 .rop-axis-label { writing-mode:vertical-rl; transform:rotate(180deg); font-size:9px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; display:flex; align-items:center; justify-content:center; min-width:14px; }
-.rop-summary-row { margin-top:10px; padding:7px 10px; background:#f8f8f8; border-radius:6px; display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; font-size:13px; color:var(--text2); border-top:1px solid var(--border); }
+.rop-summary-row { margin-top:10px; padding:7px 10px; background:#f8f8f8; border-radius:6px; display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; font-size:11px; color:var(--text2); border-top:1px solid var(--border); }
 .rop-sum-label { font-weight:700; color:var(--text1); }
-.rop-sum-val { font-size:18px; font-weight:800; color:var(--accent); }
-.rop-sum-pct { font-size:18px; font-weight:800; color:var(--ok); }
+.rop-sum-val { font-size:15px; font-weight:800; color:var(--accent); }
+.rop-sum-pct { font-size:15px; font-weight:800; color:var(--ok); }
 
 /* DOWNLOAD SECTION */
 .dl-section { margin-top: 1rem; }
@@ -8601,8 +8601,12 @@ function ropGenerate() {
 // Draws value labels on top of vertical bars
 const ropRDValPlugin = {
   id:'ropRDVal',
-  afterDatasetsDraw(chart) {
-    const {ctx} = chart;
+  afterDraw(chart) {
+    const {ctx, chartArea} = chart;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+    ctx.clip();
     chart.data.datasets.forEach((ds, di) => {
       const meta = chart.getDatasetMeta(di);
       if (meta.hidden || meta.type === 'line') return;
@@ -8610,18 +8614,17 @@ const ropRDValPlugin = {
         const v = ds.data[i];
         if (v == null || isNaN(v)) return;
         const barH = Math.abs(bar.base - bar.y);
-        if (barH < 18) return;
+        if (barH < 20) return;
         // Dark navy bars (base dataset, optimismo=5 & autoeficacia=6) get white text
         const isWhite = di === 0 && (i === 5 || i === 6);
-        ctx.save();
         ctx.fillStyle = isWhite ? '#fff' : '#111';
         ctx.font = 'bold 11px Inter,sans-serif';
         ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(Number(v).toFixed(2), bar.x, bar.base - 5);
-        ctx.restore();
+        ctx.textBaseline = 'middle';
+        ctx.fillText(Number(v).toFixed(2), bar.x, bar.base - 12);
       });
     });
+    ctx.restore();
   }
 };
 
@@ -8880,13 +8883,10 @@ function ropRenderRD(filterSets) {
   filterSets = filterSets.slice(0, 2);
   const dimIds = [...ROP_RECURSOS, ...ROP_DEMANDAS];
   const dims = dimIds.map(id => MAESTRO.find(d => d.id === id)).filter(Boolean);
-  const RD_SHORT = {
-    oportunidades:'Oport.', coaching:'Coach.', retroalimentacion:'Retroal.',
-    colaboracion:'Colab.', autonomia:'Autonom.', optimismo:'Optim.',
-    autoeficacia:'Autoefic.', presion:'Presión', cognitivas:'Cognit.',
-    emocionales:'Emocio.', conflictoderol:'C.Rol', trabas:'Trabas',
-  };
-  const labels = dims.map(d => RD_SHORT[d.id] || d.nombre);
+  const labels = dims.map(d => {
+    const w = d.nombre.split(' ');
+    return w.length > 2 ? [w.slice(0,Math.ceil(w.length/2)).join(' '), w.slice(Math.ceil(w.length/2)).join(' ')] : d.nombre;
+  });
   // Per-dimension colors — order must match ROP_RECURSOS + ROP_DEMANDAS (= RD_ORDER of main chart)
   // ROP_RECURSOS: oportunidades, coaching, retroalimentacion, colaboracion, autonomia, optimismo, autoeficacia
   // ROP_DEMANDAS: presion, cognitivas, emocionales, conflictoderol, trabas
@@ -8954,7 +8954,7 @@ function ropRenderRD(filterSets) {
       },
       scales:{
         y:{ min:1, max:5, ticks:{stepSize:1,font:{size:11}}, grid:{color:'rgba(0,0,0,.05)'} },
-        x:{ grid:{display:false}, ticks:{font:{size:10}, maxRotation:0, minRotation:0, autoSkip:false} }
+        x:{ grid:{display:false}, ticks:{font:{size:9}, maxRotation:45} }
       }
     }
   });
