@@ -1369,6 +1369,7 @@ const MAESTRO = [
   {id:'engagement',     nombre:'Engagement',                 preguntas:['WE1','WE2','WE3','WE4','WE5','WE6','WE7','WE8','WE9'],
    textos:['Mientras trabajo me siento lleno de energía','Mientras trabajo me siento fuerte y energizado','Cuando me levanto en la mañana, siento ganas de trabajar','Me entusiasma mi trabajo','Mi trabajo me inspira','Me enorgullezco del trabajo que realizo','Me siento feliz cuando estoy trabajando intensamente','Cuando estoy trabajando, me olvido de todo lo que me rodea','Cuando estoy trabajando, pierdo la noción del tiempo'],
    sistCols:['workengagement','engagement'],
+   altPreguntas:['engagement_1','engagement_2','engagement_3','engagement_4','engagement_5','engagement_6','engagement_7','engagement_8','engagement_9'],
    calculo:'promedio',rango:[0,6]},
   {id:'autonomia',      nombre:'Autonomía',                  preguntas:['auto1','auto2','auto3'],
    textos:['¿Tienes flexibilidad para hacer tu trabajo?','¿Tienes control sobre la forma en que realizas tu trabajo?','¿Puedes participar en la toma de decisiones relacionada con tu trabajo?'],
@@ -1377,6 +1378,7 @@ const MAESTRO = [
   {id:'optimismo',      nombre:'Optimismo',                  preguntas:['optim1','optim2','optim4','optim5'],
    textos:['Normalmente espero lo mejor durante momentos inciertos','Siempre soy optimista respecto a mi futuro','En general asumo que me van a pasar más cosas positivas que negativas','Cuento con que me van a pasar cosas buenas'],
    sistCols:['optimism','optimismo'],
+   altPreguntas:['optimismo_1','optimismo_2','optimismo_3','optimismo_4'],
    calculo:'promedio', rango:[1,5]},
   {id:'presion',        nombre:'Presión en el trabajo',      preguntas:['wp1','wp2','wp3','wp4'],
    textos:['¿Debes trabajar rápidamente?','¿Tienes mucho trabajo por hacer?','¿Qué tan seguido debes trabajar más intensamente con el fin de cumplir un plazo límite?','¿Trabajas presionado por el tiempo?'],
@@ -1393,10 +1395,12 @@ const MAESTRO = [
   {id:'conflictoderol', nombre:'Conflicto de rol',           preguntas:['rolcon1','rolcon3','rolcon4'],
    textos:['Recibo requerimientos contradictorios de personas distintas','Las expectativas de mis colegas son contradictorias','En mi trabajo, diferentes grupos de personas esperan cosas opuestas de mi'],
    sistCols:['roleconflict','conflictoderol'],
+   altPreguntas:['conflicto_1','conflicto_2','conflicto_3'],
    calculo:'promedio', rango:[1,5]},
   {id:'trabas',         nombre:'Trabas en el trabajo',       preguntas:['hassle2','hassle3','hassle4','hassle5'],
    textos:['Debo resolver muchas trabas para terminar mis proyectos/tareas','Debo pasar por muchos trámites y papeleos para hacer mi trabajo','En mi trabajo me enfrento a trabas inesperadas','Debo pasar por muchas trabas para terminar mi trabajo'],
    sistCols:['hassles','trabas','trabaseneltrabajo'],
+   altPreguntas:['trabas_1','trabas_2','trabas_3','trabas_4'],
    calculo:'promedio', rango:[1,5]},
   {id:'enps',           nombre:'eNPS',                       preguntas:['eNPS'],
    textos:['En una escala del 1 al 10, donde 1 es nada dispuesto 10 es muy dispuesto ¿qué tan dispuesta/o estarías a recomendar a un familiar o amigo trabajar en esta organización?'],
@@ -1404,6 +1408,7 @@ const MAESTRO = [
   {id:'agotamiento',    nombre:'Agotamiento',                preguntas:['EX1','EX2','EX3','EX4'],
    textos:['Hay días en los que me siento cansado antes de empezar a  trabajar','Después del trabajo, tiendo a necesitar más tiempo que antes para relajarme y sentirme mejor','Durante el trabajo, a menudo me siento emocionalmente agotado','Después del trabajo, normalmente me siento desgastado y cansado'],
    sistCols:['exhaustion','burnout','agotamiento'],
+   altPreguntas:['agotamiento_1','agotamiento_2','agotamiento_3','agotamiento_4'],
    calculo:'promedio', rango:[1,4]},
 ];
 const THR = 0.05;
@@ -1452,13 +1457,23 @@ function findSysCol(dim, headers) {
 function detectDimensions(headers) {
   const found = [], missing = [];
   for (const dim of MAESTRO) {
-    const qCols = dim.preguntas.map((q, i) => {
+    let qCols = dim.preguntas.map((q, i) => {
       let col = findCol(q, headers);
       if (!col && dim.textos && dim.textos[i]) col = findCol(dim.textos[i], headers);
       return { q, col };
     }).filter(x => x.col);
-    if (qCols.length > 0) found.push({ dim, qCols, partial: qCols.length < dim.preguntas.length });
-    else missing.push(dim);
+    // Fallback a nombres alternativos de ítems (ej: agotamiento_1, engagement_1)
+    if (!qCols.length && dim.altPreguntas) {
+      qCols = dim.altPreguntas.map(q => ({ q, col: findCol(q, headers) })).filter(x => x.col);
+    }
+    if (qCols.length > 0) {
+      found.push({ dim, qCols, partial: qCols.length < dim.preguntas.length });
+    } else {
+      // Fallback: aceptar bases con solo columna pre-calculada (sin ítems individuales)
+      const sysCol = findSysCol(dim, headers);
+      if (sysCol) found.push({ dim, qCols: [], partial: false, sysColOnly: true });
+      else missing.push(dim);
+    }
   }
   return { found, missing };
 }
@@ -1497,18 +1512,24 @@ function runCalcAnalysis(headers, rows, detected) {
   const errDims = [], okDims = [];
   for (const { dim, qCols } of detected.found) {
     if (dim.calculo === 'enps') {
-      // Buscar columna eNPS con valores numéricos (saltar columnas de texto como eNPS_tag)
+      // Buscar columna eNPS con escala 0-10 real (debe tener valores > 5 para evitar confundir con escala 1-5)
       let eCol = null;
       for (const h of headers) {
         if (!h || !norm(h).replace(/_/g,'').includes('enps')) continue;
         const idx = headers.indexOf(h);
-        const hasNums = rows.some(r => { const v = parseFloat(r[idx]); return !isNaN(v) && v >= 0 && v <= 10; });
-        if (hasNums) { eCol = h; break; }
+        const numVals = rows.map(r => parseFloat(r[idx])).filter(v => !isNaN(v) && v >= 0 && v <= 10);
+        if (numVals.length && numVals.some(v => v > 5)) { eCol = h; break; }
       }
-      // Fallback: usar qCols detectada si tiene datos numéricos
-      if (!eCol && qCols.length) {
-        const idx = headers.indexOf(qCols[0].col);
-        if (rows.some(r => !isNaN(parseFloat(r[idx])))) eCol = qCols[0].col;
+      // Fallback: buscar columna 'recomendar'/'recommend' con escala 0-10 (ej: Transbank)
+      if (!eCol) {
+        for (const h of headers) {
+          if (!h) continue;
+          const nh = norm(h);
+          if (!nh.includes('recomendar') && !nh.includes('recommend')) continue;
+          const idx = headers.indexOf(h);
+          const numVals = rows.map(r => parseFloat(r[idx])).filter(v => !isNaN(v) && v >= 0 && v <= 10);
+          if (numVals.length && numVals.some(v => v > 5)) { eCol = h; break; }
+        }
       }
       if (eCol) {
         const vals = rows.map(r => parseFloat(r[headers.indexOf(eCol)])).filter(v => !isNaN(v) && v >= 0 && v <= 10);
@@ -1524,6 +1545,7 @@ function runCalcAnalysis(headers, rows, detected) {
     const sysColIdx = sysCol ? headers.indexOf(sysCol) : -1;
     const errRows = [];
     rows.forEach((row, ri) => {
+      if (qCols.length === 0) return; // sysColOnly: no hay ítems para verificar
       const nums = qColIdxs.map(i => parseFloat(i >= 0 ? row[i] : NaN)).filter(v => !isNaN(v));
       if (nums.length !== qCols.length) return;
       const calc = nums.reduce((a, b) => a + b, 0) / nums.length;
@@ -1533,7 +1555,9 @@ function runCalcAnalysis(headers, rows, detected) {
       if (Math.abs(calc - sys) >= THR) errRows.push({ rowIdx: ri, id: row[headers.indexOf(idCol)], calc: +calc.toFixed(4), sys: +sys.toFixed(4), diff: +(Math.abs(calc - sys)).toFixed(4) });
     });
     if (errRows.length) errDims.push({ dim, sysCol, qCols, errRows, calcColName });
-    else okDims.push({ dim, sysCol, qCols, note: sysCol ? 'Sin discrepancias' : 'Sin columna sistema', errRows: [], calcColName });
+    else okDims.push({ dim, sysCol, qCols,
+      note: qCols.length === 0 ? (sysCol ? 'Solo columna pre-calculada (sin ítems)' : 'Sin datos disponibles') : (sysCol ? 'Sin discrepancias' : 'Sin columna sistema'),
+      errRows: [], calcColName });
   }
   return { errDims, okDims, idCol };
 }
@@ -8274,10 +8298,12 @@ function ropBuildFilters() {
   ROP.mediciones = medCol ? [...new Set(ROP.rows.map(r => String(r[ROP.headers.indexOf(medCol)]).trim()).filter(Boolean))].sort() : [];
 
   const skip = new Set([medCol]);
-  const systemPattern = /^(SE|EX|oppor|coach|retro|colab|auto|opt|press|cogn|emoc|conf|trab|ENG|NPS|enps|riesgo|alto|bajo|binary|bynary)/i;
+  const systemPattern = /^(SE|WE|EX|wp|soc|feedb|hassle|rolcon|oppor|coach|retro|colab|auto|agot|opt|press|cogn|emoc|conf|trab|ENG|NPS|enps|riesgo|alto|bajo|binary|bynary)/i;
   ROP.clasCols = ROP.headers.filter(h => {
     if (!h || skip.has(h)) return false;
     if (systemPattern.test(h)) return false;
+    // También verificar con nombre normalizado (captura formatos como "(WE1) - texto")
+    if (systemPattern.test(norm(h))) return false;
     const vals = [...new Set(ROP.rows.map(r => String(r[ROP.headers.indexOf(h)]).trim()).filter(Boolean))];
     return vals.length >= 2 && vals.length <= 80;
   });
@@ -8501,8 +8527,16 @@ function ropFilterRows(rows, medicion, clasificaciones) {
 function ropCalcDim(dimId, rows) {
   const dim = MAESTRO.find(d => d.id === dimId);
   if (!dim) return null;
-  const qCols = dim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
-  if (!qCols.length) return null;
+  let qCols = dim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  if (!qCols.length && dim.altPreguntas) qCols = dim.altPreguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  if (!qCols.length) {
+    // Fallback: usar columna pre-calculada cuando no hay ítems individuales
+    const sysCol = findSysCol(dim, ROP.headers);
+    if (!sysCol) return null;
+    const idx = ROP.headers.indexOf(sysCol);
+    const vals = rows.map(r => parseFloat(r[idx])).filter(v => !isNaN(v));
+    return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+  }
   const vals = rows.map(r => {
     const vs = qCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
     return vs.length ? vs.reduce((a,b)=>a+b,0)/vs.length : null;
@@ -8514,8 +8548,19 @@ function ropCalcDim(dimId, rows) {
 function ropCalcEng(rows) {
   const dim = MAESTRO.find(d => d.id === 'engagement');
   if (!dim) return {avg:null, pct:null};
-  const qCols = dim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
-  if (!qCols.length) return {avg:null, pct:null};
+  let qCols = dim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  if (!qCols.length && dim.altPreguntas) qCols = dim.altPreguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  if (!qCols.length) {
+    // Fallback: usar columna pre-calculada
+    const sysCol = findSysCol(dim, ROP.headers);
+    if (!sysCol) return {avg:null, pct:null};
+    const idx = ROP.headers.indexOf(sysCol);
+    const vals = rows.map(r => parseFloat(r[idx])).filter(v => !isNaN(v));
+    if (!vals.length) return {avg:null, pct:null};
+    const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+    const pct = vals.filter(v => v >= 4.5).length / vals.length * 100;
+    return {avg, pct};
+  }
   const vals = rows.map(r => {
     const vs = qCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
     return vs.length ? vs.reduce((a,b)=>a+b,0)/vs.length : null;
@@ -8529,8 +8574,19 @@ function ropCalcEng(rows) {
 function ropCalcAgot(rows) {
   const dim = MAESTRO.find(d => d.id === 'agotamiento');
   if (!dim) return {avg:null, pct:null};
-  const qCols = dim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
-  if (!qCols.length) return {avg:null, pct:null};
+  let qCols = dim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  if (!qCols.length && dim.altPreguntas) qCols = dim.altPreguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  if (!qCols.length) {
+    // Fallback: usar columna pre-calculada
+    const sysCol = findSysCol(dim, ROP.headers);
+    if (!sysCol) return {avg:null, pct:null};
+    const idx = ROP.headers.indexOf(sysCol);
+    const vals = rows.map(r => parseFloat(r[idx])).filter(v => !isNaN(v));
+    if (!vals.length) return {avg:null, pct:null};
+    const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+    const pct = vals.filter(v => v >= 3.0).length / vals.length * 100;
+    return {avg, pct};
+  }
   const vals = rows.map(r => {
     const vs = qCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
     return vs.length ? vs.reduce((a,b)=>a+b,0)/vs.length : null;
@@ -8543,11 +8599,23 @@ function ropCalcAgot(rows) {
 
 function ropCalcEnps(rows) {
   let eCol = null;
+  // Paso 1: buscar columna con 'enps' en el nombre y escala 0-10 real (debe tener valores > 5)
   for (const h of ROP.headers) {
     if (!h || !norm(h).replace(/_/g,'').includes('enps')) continue;
     const idx = ROP.headers.indexOf(h);
-    const hasNums = rows.some(r => { const v=parseFloat(r[idx]); return !isNaN(v) && v>=0 && v<=10; });
-    if (hasNums) { eCol = h; break; }
+    const numVals = rows.map(r => parseFloat(r[idx])).filter(v => !isNaN(v) && v >= 0 && v <= 10);
+    if (numVals.length && numVals.some(v => v > 5)) { eCol = h; break; }
+  }
+  // Paso 2: sin resultado → buscar columna 'recomendar'/'recommend' con escala 0-10 (ej: Transbank)
+  if (!eCol) {
+    for (const h of ROP.headers) {
+      if (!h) continue;
+      const nh = norm(h);
+      if (!nh.includes('recomendar') && !nh.includes('recommend')) continue;
+      const idx = ROP.headers.indexOf(h);
+      const numVals = rows.map(r => parseFloat(r[idx])).filter(v => !isNaN(v) && v >= 0 && v <= 10);
+      if (numVals.length && numVals.some(v => v > 5)) { eCol = h; break; }
+    }
   }
   if (!eCol) return null;
   const idx = ROP.headers.indexOf(eCol);
@@ -8953,14 +9021,31 @@ function ropGetOptimalRows(rows) {
   const engDim  = MAESTRO.find(d => d.id === 'engagement');
   const agotDim = MAESTRO.find(d => d.id === 'agotamiento');
   if (!engDim || !agotDim) return null;
-  const engCols  = engDim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
-  const agotCols = agotDim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
-  if (!engCols.length || !agotCols.length) return null;
+  let engCols  = engDim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  if (!engCols.length && engDim.altPreguntas) engCols = engDim.altPreguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  let agotCols = agotDim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  if (!agotCols.length && agotDim.altPreguntas) agotCols = agotDim.altPreguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
+  // Fallback: usar columnas pre-calculadas si no hay ítems individuales
+  const engSys  = !engCols.length  ? findSysCol(engDim,  ROP.headers) : null;
+  const agotSys = !agotCols.length ? findSysCol(agotDim, ROP.headers) : null;
+  if (!engCols.length  && !engSys)  return null;
+  if (!agotCols.length && !agotSys) return null;
   const scored = rows.map(r => {
-    const eVs = engCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
-    const aVs = agotCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
-    const eng  = eVs.length  ? eVs.reduce((a,b)=>a+b,0)/eVs.length  : null;
-    const agot = aVs.length  ? aVs.reduce((a,b)=>a+b,0)/aVs.length : null;
+    let eng = null, agot = null;
+    if (engCols.length) {
+      const eVs = engCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
+      eng = eVs.length ? eVs.reduce((a,b)=>a+b,0)/eVs.length : null;
+    } else {
+      const v = parseFloat(r[ROP.headers.indexOf(engSys)]);
+      eng = isNaN(v) ? null : v;
+    }
+    if (agotCols.length) {
+      const aVs = agotCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
+      agot = aVs.length ? aVs.reduce((a,b)=>a+b,0)/aVs.length : null;
+    } else {
+      const v = parseFloat(r[ROP.headers.indexOf(agotSys)]);
+      agot = isNaN(v) ? null : v;
+    }
     return { r, eng, agot };
   }).filter(x => x.eng !== null && x.agot !== null);
   if (!scored.length) return null;
