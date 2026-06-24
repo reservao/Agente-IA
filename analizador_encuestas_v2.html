@@ -4140,7 +4140,15 @@ function normalize(s) {
 function rNorm(s) { return normalize(s); }
 
 function detectMedicionCol(headers) {
-  return rFindCol(['medicion','measurement','periodo','year','año','mes','month','ola','wave'], headers);
+  // Usa coincidencia de palabra completa (no subcadena) para evitar que
+  // "colaboracion" (que contiene "ola") sea detectada como columna de medición
+  const keywords = new Set(['medicion','measurement','periodo','year','ano','mes','month','ola','wave']);
+  for (const h of headers) {
+    // Normalizar y separar en tokens: espacios y guiones bajos como separadores
+    const tokens = normalize(h).replace(/_/g,' ').split(/\s+/).filter(Boolean);
+    if (tokens.some(t => keywords.has(t))) return h;
+  }
+  return null;
 }
 
 function rFindCol(keywords, headers) {
