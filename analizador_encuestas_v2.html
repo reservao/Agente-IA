@@ -1294,8 +1294,8 @@ tr:hover td { background: var(--bg); }
         <div id="rop-canvas-wrap" style="position:relative;width:100%;aspect-ratio:2/1;background:#fff;border-radius:var(--radius);border:1px solid #d1d9e0;overflow:visible;min-height:400px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
 
           <!-- Fila 1 (0–10%): Título -->
-          <div style="position:absolute;left:0;right:0;top:0;height:10%;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid #e5e7eb;background:#f8fafc;border-radius:var(--radius) var(--radius) 0 0">
-            <div id="rop-seg-title" style="font-size:14px;font-weight:800;color:var(--accent)"></div>
+          <div style="position:absolute;left:0;right:0;top:0;height:10%;display:flex;align-items:center;padding:0 14px;border-bottom:2px solid #e2e8f0;background:#eef2f7;border-radius:var(--radius) var(--radius) 0 0">
+            <div id="rop-seg-title" style="font-size:14px;font-weight:800;color:#1e3a5f;letter-spacing:.02em;text-transform:uppercase"></div>
           </div>
 
           <!-- ENGAGEMENT -->
@@ -9160,8 +9160,12 @@ function ropRenderRD(filterSets) {
         legend:{
           display:true, position:'top',
           labels:{
-            font:{size:10}, boxWidth:22, boxHeight:2, padding:10,
-            filter: (item, data) => data.datasets[item.datasetIndex].type === 'line'
+            font:{size:10}, boxWidth:14, boxHeight:2, padding:10,
+            filter: (item, data) => {
+              const ds = data.datasets[item.datasetIndex];
+              if (ds.type === 'line') return true;  // siempre mostrar líneas ref.
+              return item.datasetIndex === 0;        // solo el primer dataset de barras (azul)
+            }
           }
         },
         tooltip:{ callbacks:{ label: ctx => ctx.parsed.y != null ? `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}` : '—' } }
