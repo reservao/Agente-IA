@@ -1288,8 +1288,10 @@ tr:hover td { background: var(--bg); }
           <div id="rop-title-bar" style="font-size:15px;font-weight:700;color:var(--text1)"></div>
           <button class="btn btn-secondary" style="font-size:12px" onclick="ropDownloadPNG()">⬇ Descargar PNG</button>
         </div>
+        <!-- Marco exterior capturable (incluido en el PNG) -->
+        <div id="rop-export-frame" style="background:#f1f5f9;border-radius:10px;padding:14px;box-shadow:0 2px 12px rgba(0,0,0,0.08);border:1px solid #dde3ec">
         <!-- Contenedor capturable — grid 20×10 proporcional -->
-        <div id="rop-canvas-wrap" style="position:relative;width:100%;aspect-ratio:2/1;background:#fff;border-radius:var(--radius);border:1px solid var(--border);overflow:visible;min-height:400px">
+        <div id="rop-canvas-wrap" style="position:relative;width:100%;aspect-ratio:2/1;background:#fff;border-radius:var(--radius);border:1px solid #d1d9e0;overflow:visible;min-height:400px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
 
           <!-- Fila 1 (0–10%): Título -->
           <div style="position:absolute;left:0;right:0;top:0;height:10%;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid #e5e7eb;background:#f8fafc;border-radius:var(--radius) var(--radius) 0 0">
@@ -1340,6 +1342,7 @@ tr:hover td { background: var(--bg); }
           </div>
 
         </div>
+        </div><!-- /rop-export-frame -->
       </div>
     </div><!-- /r-sub-onepage -->
 
@@ -9215,9 +9218,9 @@ function ropRenderENPS(filterSets) {
 
 function ropDownloadPNG() {
   const doCapture = () => {
-    const wrap = document.getElementById('rop-canvas-wrap');
+    const wrap = document.getElementById('rop-export-frame');
     const title = document.getElementById('rop-title-bar').textContent.replace(/[^a-z0-9_\- ]/gi,'').replace(/\s+/g,'_');
-    html2canvas(wrap, {backgroundColor:'#ffffff', scale:2}).then(canvas => {
+    html2canvas(wrap, {backgroundColor:'#f1f5f9', scale:2}).then(canvas => {
       const link = document.createElement('a');
       link.download = `OnePage_${title || 'reporte'}.png`;
       link.href = canvas.toDataURL('image/png');
