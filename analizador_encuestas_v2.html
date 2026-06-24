@@ -1286,7 +1286,10 @@ tr:hover td { background: var(--bg); }
       <div id="rop-preview" style="display:none">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
           <div id="rop-title-bar" style="font-size:15px;font-weight:700;color:var(--text1)"></div>
-          <button class="btn btn-secondary" style="font-size:12px" onclick="ropDownloadPNG()">⬇ Descargar PNG</button>
+          <div style="display:flex;gap:.5rem">
+            <button class="btn btn-secondary" style="font-size:12px" onclick="ropDownloadPNG()">⬇ Descargar PNG</button>
+            <button class="btn btn-secondary" style="font-size:12px" onclick="ropBatchToggle()">📦 Exportar lote PPT</button>
+          </div>
         </div>
         <!-- Marco exterior capturable (incluido en el PNG) -->
         <div id="rop-export-frame" style="background:#f1f5f9;border-radius:10px;padding:14px;box-shadow:0 2px 12px rgba(0,0,0,0.08);border:1px solid #dde3ec">
@@ -1343,6 +1346,42 @@ tr:hover td { background: var(--bg); }
 
         </div>
         </div><!-- /rop-export-frame -->
+
+        <!-- Panel exportar lote PPT -->
+        <div id="rop-batch-panel" style="display:none;margin-top:1rem;border:1px solid var(--border);border-radius:var(--radius);padding:1rem;background:#f8fafc">
+          <div style="font-weight:700;font-size:13px;margin-bottom:.9rem;color:var(--text1)">Exportar lote a PowerPoint</div>
+
+          <!-- Modo -->
+          <div style="margin-bottom:.9rem;font-size:12px">
+            <div style="font-weight:600;margin-bottom:.4rem;color:var(--text1)">Modo de exportación:</div>
+            <label style="display:flex;align-items:flex-start;gap:7px;margin-bottom:.4rem;cursor:pointer">
+              <input type="radio" name="rop-batch-mode" value="hierarchical" checked style="margin-top:2px">
+              <span><strong>Jerárquico</strong> — Seg.1 completo con todos sus subsegmentos, luego Seg.2 con sus subsegmentos, etc.</span>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:7px;cursor:pointer">
+              <input type="radio" name="rop-batch-mode" value="flat" style="margin-top:2px">
+              <span><strong>Solo nivel superior</strong> — Un slide por cada valor del primer nivel seleccionado, sin subsegmentos.</span>
+            </label>
+          </div>
+
+          <!-- Clasificaciones -->
+          <div style="margin-bottom:.9rem;font-size:12px">
+            <div style="font-weight:600;margin-bottom:.4rem;color:var(--text1)">Clasificaciones a iterar <span style="font-weight:400;color:var(--text2)">(selecciona y ordena de mayor a menor nivel):</span></div>
+            <div id="rop-batch-clas-list" style="display:flex;flex-direction:column;gap:.3rem"></div>
+          </div>
+
+          <!-- Acciones y progreso -->
+          <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+            <button class="btn btn-primary" style="font-size:12px" id="rop-batch-btn" onclick="ropBatchExport()">⬇ Generar PPT</button>
+            <span id="rop-batch-status" style="font-size:12px;color:var(--text2)"></span>
+          </div>
+          <div id="rop-batch-progress-wrap" style="display:none;margin-top:.6rem">
+            <div style="background:#e2e8f0;border-radius:4px;height:7px;overflow:hidden">
+              <div id="rop-batch-bar" style="background:#2563eb;height:100%;width:0%;transition:width .3s ease"></div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div><!-- /r-sub-onepage -->
 
@@ -9246,6 +9285,175 @@ function ropDownloadPNG() {
     s.onload = doCapture;
     s.onerror = () => alert('No se pudo cargar html2canvas. Verifica tu conexión a internet.');
     document.head.appendChild(s);
+  }
+}
+
+// ── BATCH EXPORT TO PPT ────────────────────────────────────────────────────
+
+function ropBatchToggle() {
+  const panel = document.getElementById('rop-batch-panel');
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  if (!open) ropBatchInitPanel();
+}
+
+function ropBatchInitPanel() {
+  const list = document.getElementById('rop-batch-clas-list');
+  list.innerHTML = '';
+  const cols = ROP.clasCols || [];
+  if (!cols.length) {
+    list.innerHTML = '<span style="color:var(--text2);font-size:12px">No hay columnas de clasificación disponibles. Carga un archivo primero.</span>';
+    return;
+  }
+  cols.forEach(col => {
+    const label = document.createElement('label');
+    label.style.cssText = 'display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;padding:3px 0';
+    label.innerHTML = `<input type="checkbox" value="${col}" style="width:14px;height:14px;cursor:pointer"> ${col}`;
+    list.appendChild(label);
+  });
+}
+
+// Construye la lista de combinaciones de segmentos a exportar.
+// Modo 'hierarchical': Seg1=A → {Seg1=A,Seg2=X}, {Seg1=A,Seg2=Y}, ... → Seg1=B → ...
+// Modo 'flat': solo valores únicos de la primera clasificación seleccionada.
+function ropBatchBuildList(clasCols, mode, rowPool, accumulated) {
+  if (!rowPool) {
+    const medicion = ROP.filters[0]?.medicion;
+    rowPool = ropFilterRows(ROP.rows, medicion, null);
+  }
+  accumulated = accumulated || [];
+  if (!clasCols.length) return [];
+
+  const col = clasCols[0];
+  const rest = clasCols.slice(1);
+  const ci = ROP.headers.indexOf(col);
+  if (ci < 0) return [];
+
+  const uniqueVals = [...new Set(rowPool.map(r => String(r[ci] ?? '')).filter(v => v !== ''))].sort();
+  const result = [];
+
+  for (const val of uniqueVals) {
+    const filters = [...accumulated, { clascol: col, segmento: val }];
+    const label = filters.map(f => f.segmento).join(' › ');
+    result.push({ clasificaciones: filters, titleLabel: label });
+
+    if (mode === 'hierarchical' && rest.length > 0) {
+      const subPool = rowPool.filter(r => String(r[ci] ?? '') === val);
+      result.push(...ropBatchBuildList(rest, mode, subPool, filters));
+    }
+  }
+  return result;
+}
+
+// Renderiza el One Page para un conjunto de filtros y captura la imagen.
+async function ropBatchRenderOne(filterSpec) {
+  const medicion = ROP.filters[0]?.medicion;
+  const rows    = ropFilterRows(ROP.rows, medicion, filterSpec.clasificaciones);
+  const orgRows = ropFilterRows(ROP.rows, medicion, null);
+  const filterSets = [{ rows, orgRows, label: medicion || '', titleLabel: filterSpec.titleLabel }];
+
+  // Destruir gráficos previos
+  Object.keys(ROP.charts).forEach(k => { if (ROP.charts[k]) { ROP.charts[k].destroy(); ROP.charts[k] = null; } });
+
+  // Limpiar canvas eNPS para evitar artefactos cuando no hay datos
+  const enpsC = document.getElementById('rop-chart-enps');
+  if (enpsC) enpsC.getContext('2d').clearRect(0, 0, enpsC.width, enpsC.height);
+
+  // Actualizar títulos
+  document.getElementById('rop-title-bar').textContent = filterSpec.titleLabel;
+  document.getElementById('rop-seg-title').textContent  = filterSpec.titleLabel;
+
+  // Renderizar
+  const showOrg = document.getElementById('rop-show-org')?.checked ?? true;
+  ropRenderEng(filterSets, showOrg);
+  ropRenderAgot(filterSets, showOrg);
+  ropRenderRD(filterSets);
+  ropRenderENPS(filterSets);
+
+  // Esperar a que Chart.js termine de pintar (RAF + margen)
+  await new Promise(r => requestAnimationFrame(() => setTimeout(r, 700)));
+
+  // Capturar
+  const frame = document.getElementById('rop-export-frame');
+  const canvas = await html2canvas(frame, { backgroundColor: '#f1f5f9', scale: 2, useCORS: true });
+  return canvas.toDataURL('image/png');
+}
+
+async function ropBatchLoadLibs() {
+  const load = (src) => new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res;
+    s.onerror = () => rej(new Error('No se pudo cargar: ' + src));
+    document.head.appendChild(s);
+  });
+  if (typeof html2canvas === 'undefined')
+    await load('https://html2canvas.hertzen.com/dist/html2canvas.min.js');
+  if (typeof PptxGenJS === 'undefined')
+    await load('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js');
+}
+
+async function ropBatchExport() {
+  // Recoger clasificaciones seleccionadas
+  const checks = Array.from(document.querySelectorAll('#rop-batch-clas-list input[type=checkbox]:checked'));
+  const clasCols = checks.map(cb => cb.value);
+  if (!clasCols.length) { alert('Selecciona al menos una clasificación.'); return; }
+
+  const mode = document.querySelector('input[name="rop-batch-mode"]:checked')?.value || 'hierarchical';
+
+  // Construir lista
+  const segments = ropBatchBuildList(clasCols, mode);
+  if (!segments.length) { alert('No se encontraron segmentos para exportar.'); return; }
+
+  // UI: bloquear botón y mostrar progreso
+  const btn       = document.getElementById('rop-batch-btn');
+  const statusEl  = document.getElementById('rop-batch-status');
+  const barEl     = document.getElementById('rop-batch-bar');
+  const progWrap  = document.getElementById('rop-batch-progress-wrap');
+  btn.disabled = true;
+  btn.textContent = 'Generando...';
+  progWrap.style.display = 'block';
+  barEl.style.width = '0%';
+  statusEl.textContent = `0 / ${segments.length} slides`;
+
+  // Asegurar que la preview esté visible (html2canvas la necesita)
+  document.getElementById('rop-preview').style.display = 'block';
+
+  try {
+    await ropBatchLoadLibs();
+
+    // Configurar PPT con aspecto 2:1 (coincide con el One Page)
+    const pptx = new PptxGenJS();
+    pptx.defineLayout({ name: 'ONEPAGE', width: 20, height: 10 });
+    pptx.layout = 'ONEPAGE';
+
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      statusEl.textContent = `Generando slide ${i + 1} / ${segments.length}: ${seg.titleLabel}`;
+      barEl.style.width = `${(i / segments.length) * 100}%`;
+
+      try {
+        const imgData = await ropBatchRenderOne(seg);
+        const slide = pptx.addSlide();
+        slide.addImage({ data: imgData, x: 0, y: 0, w: 20, h: 10 });
+      } catch (err) {
+        console.warn('[batch] Error en slide:', seg.titleLabel, err);
+      }
+    }
+
+    barEl.style.width = '100%';
+    statusEl.textContent = `Guardando ${segments.length} slides...`;
+
+    const medicion = ROP.filters[0]?.medicion || 'OnePage';
+    await pptx.writeFile({ fileName: `OnePage_batch_${medicion}.pptx` });
+
+    statusEl.textContent = `✓ ${segments.length} slides descargados.`;
+  } catch (err) {
+    console.error('[batch] Error general:', err);
+    statusEl.textContent = 'Error al generar el PPT. Revisa la consola.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⬇ Generar PPT';
+    progWrap.style.display = 'none';
   }
 }
 </script>
