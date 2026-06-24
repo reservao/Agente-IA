@@ -4219,7 +4219,7 @@ function rProcess(wb, filename) {
   const EXCLUDE_PATTERNS = [
     /^(we|ex|se|wp|cogn|soc|emo|feedb|rolcon|hassle|coach|oppor|auto|optim|intent|d\d+)\d+$/i,
     /^(autonomy|work_pressure|cognitive|social|emotional|feedback|role|hassles|opportunities|engagement|efficacy|optimism|vigor|absortion|dedication|exhaustion|intent|optimo|opteng|optago|riesgo|agotamiento|critico|detractor|neutro|promotor|aon)/i,
-    /^(vigor_|absortion_|dedication_|engagement_proportion|exhausted|antiguedad$|edad años|antiguedad años)/i,
+    /^(vigor_|absortion_|dedication_|engagement_proportion|exhausted|edad años|antiguedad años)/i,
     /^(medicion|empresa|sector|pais|numero|nombres|apellido|id_|fecha|rut|identificacion|codigo)/i,
   ];
 
@@ -4233,7 +4233,7 @@ function rProcess(wb, filename) {
 
   // Columnas demográficas conocidas
   const DEMO_EXACT = ['genero','ANTIGUEDAD_RANGO','EDAD'];
-  const DEMO_PATTERNS = [/genero|gender|sexo/i, /antiguedad_rango|rango.*antig/i, /^edad$|generacion/i];
+  const DEMO_PATTERNS = [/genero|gender|sexo/i, /antiguedad/i, /^edad$|generacion/i];
 
   // eNPS tag
   const ENPS_PATTERNS = [/enps_cat|enps_tag|enps\.tag/i];
@@ -7746,6 +7746,8 @@ function rColIdx(name) {
     if (parts.some(p => rNorm(p) === nq)) return true;
     if (nh.startsWith(nq) || nh.endsWith(nq)) return true;
     if (nh.includes('-' + nq + '-') || nh.includes('(' + nq + ')')) return true;
+    const nhCompact = nh.replace(/\s+/g, '');
+    if (nhCompact.startsWith(nq)) return true;
     return false;
   });
 }
