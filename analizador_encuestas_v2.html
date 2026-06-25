@@ -7984,22 +7984,14 @@ function rBuildRows(groups) {
     // Fallback: find raw 0-10 eNPS numeric column
     // Priority: columns with "escala" or "1 al 10" in the name, then any enps column with 0-10 values
     const enpsRawIdx = (() => {
-      const candidates = R.headers
-        .map((h, i) => ({ h, i }))
-        .filter(({ h }) => /enps/i.test(h));
-      // First try: explicitly raw scale column
-      const rawScale = candidates.find(({ h, i }) => {
-        if (/escala|1 al 10|0 al 10|0a10|1a10/i.test(h)) return true;
-        const sampleVals = R.rows.slice(0, 50).map(r => parseFloat(r[i])).filter(v => !isNaN(v));
-        return sampleVals.some(v => v > 5 && v <= 10);
+      // Find the column with "enps" in its name whose max value > 4 (rules out category codes 1-3)
+      // This works even if all respondents are detractors (0-6), as long as at least one scores > 4
+      const candidates = R.headers.map((h, i) => ({ h, i })).filter(({ h }) => /enps/i.test(h));
+      const match = candidates.find(({ h, i }) => {
+        const sampleVals = R.rows.slice(0, 100).map(r => parseFloat(r[i])).filter(v => !isNaN(v) && v >= 0);
+        return sampleVals.length > 0 && Math.max(...sampleVals) > 4;
       });
-      if (rawScale) return rawScale.i;
-      // Second try: any enps numeric column with max value > 5
-      const anyNumeric = candidates.find(({ h, i }) => {
-        const sampleVals = R.rows.slice(0, 50).map(r => parseFloat(r[i])).filter(v => !isNaN(v));
-        return sampleVals.length > 0 && Math.max(...sampleVals) > 5;
-      });
-      return anyNumeric ? anyNumeric.i : -1;
+      return match ? match.i : -1;
     })();
     if (enpsRawIdx >= 0) {
       const enpsNPS = groups.map(g => {
