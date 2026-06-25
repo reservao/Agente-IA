@@ -7981,17 +7981,21 @@ function rBuildRows(groups) {
       return +(tags.filter(t => /^detractor/i.test(t)).length / tags.length * 100).toFixed(2);
     })]);
   } else {
-    // Fallback: find raw 0-10 eNPS numeric column
-    // Priority: columns with "escala" or "1 al 10" in the name, then any enps column with 0-10 values
+    // Fallback: find raw numeric eNPS column by name (priority order, case-insensitive)
+    const ENPS_NAME_PATTERNS = [
+      /\(enps\)\s*-\s*employee\s+net\s+promoter\s+score\s*-\s*enps/i,
+      /\(enps\)\s*-\s*employee\s+net\s+promoter\s+score/i,
+      /employee\s+net\s+promoter\s+score\s*-\s*enps/i,
+      /employee\s+net\s+promoter\s+score/i,
+      /\(enps\)/i,
+      /enps/i,
+    ];
     const enpsRawIdx = (() => {
-      // Find the column with "enps" in its name whose max value > 4 (rules out category codes 1-3)
-      // This works even if all respondents are detractors (0-6), as long as at least one scores > 4
-      const candidates = R.headers.map((h, i) => ({ h, i })).filter(({ h }) => /enps/i.test(h));
-      const match = candidates.find(({ h, i }) => {
-        const sampleVals = R.rows.slice(0, 100).map(r => parseFloat(r[i])).filter(v => !isNaN(v) && v >= 0);
-        return sampleVals.length > 0 && Math.max(...sampleVals) > 4;
-      });
-      return match ? match.i : -1;
+      for (const pat of ENPS_NAME_PATTERNS) {
+        const idx = R.headers.findIndex(h => pat.test(h));
+        if (idx >= 0) return idx;
+      }
+      return -1;
     })();
     if (enpsRawIdx >= 0) {
       const enpsNPS = groups.map(g => {
