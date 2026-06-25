@@ -7298,10 +7298,10 @@ function rcpGenerate() {
       .sort((a,b)=>{ const ia=DEM_ORDER.indexOf(a.col),ib=DEM_ORDER.indexOf(b.col); return (ia<0?999:ia)-(ib<0?999:ib); });
 
     // ── Binary flag columns ───────────────────────────────────────────────
-    const engBinIdx  = rcpColIdxFuzzy('VIGOR_BINARY');
-    const agoBinIdx  = (()=>{ const i=rcpColIdxFuzzy('EXHAUSTED_BYNARY'); return i>=0?i:RCP.headers.findIndex(h=>rcpNorm(h).includes('altoagot')||rcpNorm(h)==='altoagot'); })();
-    const engMedIdx  = rcpColIdxFuzzy('WORK_ENGAGEMENT');
-    const agoMedIdx  = rcpColIdxFuzzy('EXHAUSTION');
+    const engBinIdx  = (()=>{ const i=rcpColIdxFuzzy('VIGOR_BINARY'); return i>=0?i:RCP.headers.findIndex(h=>/(alto_?engagement|engagement_?binary)/i.test(h)); })();
+    const agoBinIdx  = (()=>{ const i=rcpColIdxFuzzy('EXHAUSTED_BYNARY'); return i>=0?i:RCP.headers.findIndex(h=>rcpNorm(h).includes('altoagot')||rcpNorm(h)==='altoagot'||(/(alto_?agotamiento|agotamiento_?binary)/i.test(h))); })();
+    const engMedIdx  = (()=>{ const i=rcpColIdxFuzzy('WORK_ENGAGEMENT'); return i>=0?i:RCP.headers.findIndex(h=>/engd9/i.test(h)||rcpNorm(h).replace(/\s/g,'').includes('engagement')); })();
+    const agoMedIdx  = (()=>{ const i=rcpColIdxFuzzy('EXHAUSTION'); return i>=0?i:RCP.headers.findIndex(h=>/agotamiento|exhaustion/i.test(h)); })();
 
     // ── Detect demographic column groups ──────────────────────────────────
     const demGroupDefs = [
@@ -7344,8 +7344,27 @@ function rcpGenerate() {
       const aVals = rows.map(r=>parseFloat(r[agoMedIdx])).filter(v=>!isNaN(v));
       const engMean = eVals.length ? +(eVals.reduce((s,v)=>s+v)/eVals.length).toFixed(2) : null;
       const agoMean = aVals.length ? +(aVals.reduce((s,v)=>s+v)/aVals.length).toFixed(2) : null;
-      const altoEng = engBinIdx>=0 ? rows.filter(r=>parseFloat(r[engBinIdx])===1).length : null;
-      const altoAgo = agoBinIdx>=0 ? rows.filter(r=>parseFloat(r[agoBinIdx])===1).length : null;
+      let altoEng = null;
+      if (engBinIdx >= 0) {
+        altoEng = rows.filter(r=>parseFloat(r[engBinIdx])===1).length;
+      } else {
+        const weG = [['WE1','WE2','WE5'],['WE3','WE4','WE7'],['WE6','WE8','WE9']];
+        const hasWE = weG.flat().some(c => rcpColIdxFuzzy(c) >= 0);
+        if (hasWE) altoEng = rows.filter(row => weG.every(items => {
+          const vals = items.map(c=>{ const i=rcpColIdxFuzzy(c); return i>=0?parseFloat(row[i]):NaN; }).filter(v=>!isNaN(v));
+          return vals.length && vals.reduce((a,b)=>a+b,0)/vals.length >= 5;
+        })).length;
+      }
+      let altoAgo = null;
+      if (agoBinIdx >= 0) {
+        altoAgo = rows.filter(r=>parseFloat(r[agoBinIdx])===1).length;
+      } else {
+        const exIdxs = ['EX1','EX2','EX3','EX4'].map(c=>rcpColIdxFuzzy(c)).filter(i=>i>=0);
+        if (exIdxs.length) altoAgo = rows.filter(row => {
+          const vals = exIdxs.map(i=>parseFloat(row[i])).filter(v=>!isNaN(v));
+          return vals.length && vals.reduce((a,b)=>a+b,0)/vals.length >= 3.25;
+        }).length;
+      }
       return {
         dimVals,
         engMean, agoMean,
@@ -7686,7 +7705,7 @@ function rDdr(e) {
 
 // ── DEFINICIÓN DE DIMENSIONES PARA REPORTE ─────────────────────────────────
 const R_DIMS = [
-  { nombre:'Engagement', cols:['WORK_ENGAGEMENT'],
+  { nombre:'Engagement', cols:['WORK_ENGAGEMENT','ENGD9','Engagement','engagement'],
     sub:[
       { nombre:'Promedio Vigor',      cols:['VIGOR'],
         items:[['WE1','En mi trabajo me siento lleno de energía'],
@@ -7829,6 +7848,47 @@ function rDimMean(rows, dim) {
   return vals.length ? +(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2) : null;
 }
 
+function rSubDimMean(rows, sub) {
+  for (const c of sub.cols) {
+    const v = rMean(rows, c);
+    if (v !== null) return v;
+  }
+  const itemVals = sub.items.map(([qc]) => rMean(rows, qc)).filter(v => v !== null);
+  return itemVals.length ? +(itemVals.reduce((a,b)=>a+b,0)/itemVals.length).toFixed(2) : null;
+}
+
+function rCalcAltoEng(rows) {
+  const binIdx = R.headers.findIndex(h => /vigor_binary|alto_engagement|altoengagement|engagement_binary/i.test(rNorm(h).replace(/\s/g,'')));
+  if (binIdx >= 0) {
+    const count = rows.filter(r => parseFloat(r[binIdx]) === 1).length;
+    return rows.length ? Math.round(count / rows.length * 100) : null;
+  }
+  const weGroups = [['WE1','WE2','WE5'],['WE3','WE4','WE7'],['WE6','WE8','WE9']];
+  const hasItems = weGroups.flat().some(c => rColIdx(c) >= 0);
+  if (!hasItems) return null;
+  const count = rows.filter(row => weGroups.every(items => {
+    const vals = items.map(c => { const i=rColIdx(c); return i>=0?parseFloat(row[i]):NaN; }).filter(v=>!isNaN(v));
+    return vals.length && vals.reduce((a,b)=>a+b,0)/vals.length >= 5;
+  })).length;
+  return Math.round(count / rows.length * 100);
+}
+
+function rCalcAltoAgo(rows) {
+  const binIdx = R.headers.findIndex(h => /exhausted_bynary|alto_agotamiento|altoagotamiento|agotamiento_binary/i.test(rNorm(h).replace(/\s/g,'')));
+  if (binIdx >= 0) {
+    const count = rows.filter(r => parseFloat(r[binIdx]) === 1).length;
+    return rows.length ? Math.round(count / rows.length * 100) : null;
+  }
+  const exItems = ['EX1','EX2','EX3','EX4'];
+  const exIdxs = exItems.map(c => rColIdx(c)).filter(i => i >= 0);
+  if (!exIdxs.length) return null;
+  const count = rows.filter(row => {
+    const vals = exIdxs.map(i => parseFloat(row[i])).filter(v => !isNaN(v));
+    return vals.length && vals.reduce((a,b)=>a+b,0)/vals.length >= 3.25;
+  }).length;
+  return Math.round(count / rows.length * 100);
+}
+
 function rBuildRows(groups) {
   const out = [];
   // N row
@@ -7851,7 +7911,7 @@ function rBuildRows(groups) {
 
     if (dim.sub) {
       for (const sub of dim.sub) {
-        const subVals = groups.map(g => g.rows.length ? rMean(g.rows, sub.cols[0]) : null);
+        const subVals = groups.map(g => g.rows.length ? rSubDimMean(g.rows, sub) : null);
         if (subVals.some(v => v !== null)) {
           out.push([sub.nombre, 'subdim', ...subVals]);
           for (const [qc, ql] of sub.items) {
@@ -7866,6 +7926,14 @@ function rBuildRows(groups) {
         const itemVals = groups.map(g => g.rows.length ? rMean(g.rows, qc) : null);
         if (itemVals.some(v => v !== null)) out.push([ql, 'item', ...itemVals]);
       }
+    }
+    if (dim.nombre === 'Engagement') {
+      const altoVals = groups.map(g => g.rows.length ? rCalcAltoEng(g.rows) : null);
+      if (altoVals.some(v => v !== null)) out.push(['% Personas con Alto Engagement', 'subdim', ...altoVals]);
+    }
+    if (dim.nombre === 'Agotamiento') {
+      const altoVals = groups.map(g => g.rows.length ? rCalcAltoAgo(g.rows) : null);
+      if (altoVals.some(v => v !== null)) out.push(['% Personas con Alto Agotamiento', 'subdim', ...altoVals]);
     }
   }
 
@@ -7909,6 +7977,39 @@ function rBuildRows(groups) {
       if (!tags.length) return null;
       return +(tags.filter(t => /^detractor/i.test(t)).length / tags.length * 100).toFixed(2);
     })]);
+  } else {
+    // Fallback: find raw 0-10 eNPS numeric column
+    const enpsRawIdx = R.headers.findIndex((h, i) => {
+      if (!/enps/i.test(h)) return false;
+      const sampleVals = R.rows.slice(0, 50).map(r => parseFloat(r[i])).filter(v => !isNaN(v));
+      return sampleVals.some(v => v > 5 && v <= 10);
+    });
+    if (enpsRawIdx >= 0) {
+      const enpsNPS = groups.map(g => {
+        if (!g.rows.length) return null;
+        const vals = g.rows.map(r => parseFloat(r[enpsRawIdx])).filter(v => !isNaN(v));
+        if (!vals.length) return null;
+        const promo = vals.filter(v => v >= 9).length;
+        const detr  = vals.filter(v => v <= 6).length;
+        return +((promo - detr) / vals.length * 100).toFixed(2);
+      });
+      out.push(['eNPS', 'dim', ...enpsNPS]);
+      out.push(['% Promotores', 'subdim', ...groups.map(g => {
+        if (!g.rows.length) return null;
+        const vals = g.rows.map(r => parseFloat(r[enpsRawIdx])).filter(v => !isNaN(v));
+        return vals.length ? +(vals.filter(v => v >= 9).length / vals.length * 100).toFixed(2) : null;
+      })]);
+      out.push(['% Neutros', 'subdim', ...groups.map(g => {
+        if (!g.rows.length) return null;
+        const vals = g.rows.map(r => parseFloat(r[enpsRawIdx])).filter(v => !isNaN(v));
+        return vals.length ? +(vals.filter(v => v >= 7 && v <= 8).length / vals.length * 100).toFixed(2) : null;
+      })]);
+      out.push(['% Detractores', 'subdim', ...groups.map(g => {
+        if (!g.rows.length) return null;
+        const vals = g.rows.map(r => parseFloat(r[enpsRawIdx])).filter(v => !isNaN(v));
+        return vals.length ? +(vals.filter(v => v <= 6).length / vals.length * 100).toFixed(2) : null;
+      })]);
+    }
   }
 
   return out;
