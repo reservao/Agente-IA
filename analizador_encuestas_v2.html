@@ -4282,8 +4282,8 @@ function rProcess(wb, filename) {
   const DEMO_EXACT = ['genero','ANTIGUEDAD_RANGO','EDAD'];
   const DEMO_PATTERNS = [/genero|gender|sexo/i, /antiguedad/i, /^edad$|generacion/i];
 
-  // eNPS tag
-  const ENPS_PATTERNS = [/enps_cat|enps_tag|enps\.tag/i];
+  // eNPS tag — text-label columns (Promotor/Neutro/Detractor)
+  const ENPS_PATTERNS = [/enps_cat|enps_tag|enps\.tag|enps_oficial/i];
 
   R.sheetDefs = [];
   R.sheetDefs.push({ id:'general', label:'Resultados Generales', type:'general', checked:true });
@@ -7939,8 +7939,10 @@ function rBuildRows(groups) {
   }
 
   // ── eNPS al final ──────────────────────────────────────────────────────
-  // Detect eNPS tag column (ENPS_CAT, ENPS_TAG, etc.)
-  const enpsTagIdx = R.headers.findIndex(h => /enps_cat|enps_tag|enps\.tag/i.test(h));
+  // Detect eNPS tag column (text: Promotor/Neutro/Detractor)
+  const enpsTagIdx = R.headers.findIndex(h => /enps_cat|enps_tag|enps\.tag|enps_oficial/i.test(h))
+    !== -1 ? R.headers.findIndex(h => /enps_cat|enps_tag|enps\.tag|enps_oficial/i.test(h))
+    : R._enpsTagIdx >= 0 ? R._enpsTagIdx : -1;
   if (enpsTagIdx >= 0) {
     // eNPS score row
     const enpsRow = ['eNPS', 'dim', ...groups.map(g => {
@@ -7980,11 +7982,25 @@ function rBuildRows(groups) {
     })]);
   } else {
     // Fallback: find raw 0-10 eNPS numeric column
-    const enpsRawIdx = R.headers.findIndex((h, i) => {
-      if (!/enps/i.test(h)) return false;
-      const sampleVals = R.rows.slice(0, 50).map(r => parseFloat(r[i])).filter(v => !isNaN(v));
-      return sampleVals.some(v => v > 5 && v <= 10);
-    });
+    // Priority: columns with "escala" or "1 al 10" in the name, then any enps column with 0-10 values
+    const enpsRawIdx = (() => {
+      const candidates = R.headers
+        .map((h, i) => ({ h, i }))
+        .filter(({ h }) => /enps/i.test(h));
+      // First try: explicitly raw scale column
+      const rawScale = candidates.find(({ h, i }) => {
+        if (/escala|1 al 10|0 al 10|0a10|1a10/i.test(h)) return true;
+        const sampleVals = R.rows.slice(0, 50).map(r => parseFloat(r[i])).filter(v => !isNaN(v));
+        return sampleVals.some(v => v > 5 && v <= 10);
+      });
+      if (rawScale) return rawScale.i;
+      // Second try: any enps numeric column with max value > 5
+      const anyNumeric = candidates.find(({ h, i }) => {
+        const sampleVals = R.rows.slice(0, 50).map(r => parseFloat(r[i])).filter(v => !isNaN(v));
+        return sampleVals.length > 0 && Math.max(...sampleVals) > 5;
+      });
+      return anyNumeric ? anyNumeric.i : -1;
+    })();
     if (enpsRawIdx >= 0) {
       const enpsNPS = groups.map(g => {
         if (!g.rows.length) return null;
