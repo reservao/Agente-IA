@@ -6138,20 +6138,28 @@ function rcpGenerate() {
         const vals = rows.map(r=>parseFloat(r[bIdx])).filter(v=>!isNaN(v));
         if(vals.length) return +(vals.reduce((a,b)=>a+b,0)/vals.length*100).toFixed(1);
       }
-      // Per-person mean fallback
-      const personMap = {};
-      itemsMap[mainCol].forEach(c => {
-        const ii = rcpColIdxFuzzy(c);
-        if(ii<0) return;
-        rows.forEach((r,ri) => {
-          const v=parseFloat(r[ii]);
-          if(!isNaN(v)){ if(!personMap[ri]) personMap[ri]=[]; personMap[ri].push(v); }
-        });
-      });
-      const means = Object.values(personMap).map(vs=>vs.reduce((a,b)=>a+b,0)/vs.length);
-      if(!means.length) return null;
-      const threshold = isEng ? 4.5 : 2.5;
-      return +(means.filter(v=>v>=threshold).length/means.length*100).toFixed(1);
+      // Per-person fallback (sin columna binaria pre-calculada)
+      if (isEng) {
+        // Alto Engagement: Vigor, Dedicación y Absorción promedian >=5 CADA UNA, simultáneamente
+        // (NO el promedio general de los 9 ítems >=4.5, que sobreestima el %)
+        const subGroups = [['WE1','WE2','WE5'], ['WE3','WE4','WE7'], ['WE6','WE8','WE9']];
+        const subIdxs = subGroups.map(g => g.map(c => rcpColIdxFuzzy(c)).filter(i => i >= 0));
+        if (!subIdxs.every(g => g.length) || !rows.length) return null;
+        const count = rows.filter(r => subIdxs.every(idxs => {
+          const vs = idxs.map(i => parseFloat(r[i])).filter(v => !isNaN(v));
+          return vs.length && vs.reduce((a,b)=>a+b,0)/vs.length >= 5;
+        })).length;
+        return +(count/rows.length*100).toFixed(1);
+      } else {
+        // Alto Agotamiento: promedio EX1-EX4 >= 3.25
+        const exIdxs = ['EX1','EX2','EX3','EX4'].map(c => rcpColIdxFuzzy(c)).filter(i => i >= 0);
+        if (!exIdxs.length || !rows.length) return null;
+        const count = rows.filter(r => {
+          const vs = exIdxs.map(i => parseFloat(r[i])).filter(v => !isNaN(v));
+          return vs.length && vs.reduce((a,b)=>a+b,0)/vs.length >= 3.25;
+        }).length;
+        return +(count/rows.length*100).toFixed(1);
+      }
     });
 
     // Resize canvas
