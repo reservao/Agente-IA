@@ -5104,7 +5104,9 @@ const RCP_COL_ALIASES = {
   'DEDICATION':       ['dedication','dedicacion','promedio_dedicacion','promedio dedicacion'],
   'ABSORTION':        ['absortion','absorption','absorcion','promedio_absorcion','promedio absorcion'],
   'VIGOR_BINARY':     ['vigorbinary','altovigor','alto_vigor','alto vigor','high_vigor'],
-  'EXHAUSTED_BYNARY': ['exhaustedbynary','exhaustedbinary','altoagotamiento','alto_agotamiento','alto agotamiento','high_exhaustion'],
+  'EXHAUSTED_BYNARY': ['exhaustedbynary','exhaustedbinary','exhausted_binary','high_exhaustion','highexhaustion'],
+  'ALTO_ENGAGEMENT':  ['altoengagement','alto_engagement','alto engagement','altoeng','alto_eng','alto eng','engagementbinary','engagement_binary','high_engagement','highengagement'],
+  'ALTO_AGOTAMIENTO': ['altoagotamiento','alto_agotamiento','alto agotamiento','altoagot','alto_agot','alto agot','agotamientobinary','agotamiento_binary','high_agotamiento','highagotamiento'],
   'SELF_EFFICACY':    ['selfefficacy','autoeficacia','auto_eficacia','promedio_autoeficacia','promedio autoeficacia'],
   'OPTIMISM':         ['optimism','optimismo','promedio_optimismo','promedio optimismo'],
   'OPPORTUNITIES_FOR_DEVELOPMENT': ['opportunitiesfordevelopment','opportunities','oportunidades','oppor','oportunidades_de_desarrollo','promedio_oportunidades','promedio oportunidades'],
@@ -6053,9 +6055,6 @@ function rcpGenerate() {
     const hideLow  = hideEl ? hideEl.value === 'hide' : false;
 
     const mainCol  = isEng ? 'WORK_ENGAGEMENT' : 'EXHAUSTION';
-    // ALTO_ENGAGEMENT = 3 sub-dims (Vigor, Dedicación, Absorción) ≥5 simultáneamente.
-    // NOT VIGOR_BINARY, que solo mide Vigor ≥5 y sobreestima el %.
-    const binaryCol= isEng ? 'ALTO_ENGAGEMENT' : 'EXHAUSTED_BYNARY';
     const barColor = isEng ? '#1B3F6E' : '#A8442B';
     const barTop   = isEng ? 'rgba(27,63,110,0.98)' : 'rgba(168,68,43,0.98)';
     const barBot   = isEng ? 'rgba(27,63,110,0.78)' : 'rgba(168,68,43,0.78)';
@@ -6128,9 +6127,13 @@ function rcpGenerate() {
     });
 
     // Compute binary %
+    // Prioridad: para agotamiento, EXHAUSTED_BYNARY si existe, si no ALTO_AGOTAMIENTO (y variantes)
+    const binIdxResolved = isEng
+      ? rcpColIdxFuzzy('ALTO_ENGAGEMENT')
+      : (() => { const i = rcpColIdxFuzzy('EXHAUSTED_BYNARY'); return i>=0 ? i : rcpColIdxFuzzy('ALTO_AGOTAMIENTO'); })();
     const binaryPct = chartRowGroups.map((rows, i) => {
       if(nmin > 0 && rows.length < nmin) return null;
-      const bIdx = rcpColIdxFuzzy(binaryCol);
+      const bIdx = binIdxResolved;
       if(bIdx >= 0) {
         const vals = rows.map(r=>parseFloat(r[bIdx])).filter(v=>!isNaN(v));
         if(vals.length) return +(vals.reduce((a,b)=>a+b,0)/vals.length*100).toFixed(1);
@@ -7301,9 +7304,10 @@ function rcpGenerate() {
       .sort((a,b)=>{ const ia=DEM_ORDER.indexOf(a.col),ib=DEM_ORDER.indexOf(b.col); return (ia<0?999:ia)-(ib<0?999:ib); });
 
     // ── Binary flag columns ───────────────────────────────────────────────
-    // Use ALTO_ENGAGEMENT (all 3 sub-dims ≥ 5), NOT VIGOR_BINARY (only vigor ≥ 5)
-    const engBinIdx  = (()=>{ const i=rcpColIdxFuzzy('ALTO_ENGAGEMENT'); return i>=0?i:RCP.headers.findIndex(h=>/^alto_?engagement$|^altoengagement$/i.test(rcpNorm(h).replace(/\s/g,''))); })();
-    const agoBinIdx  = (()=>{ const i=rcpColIdxFuzzy('EXHAUSTED_BYNARY'); return i>=0?i:RCP.headers.findIndex(h=>rcpNorm(h).includes('altoagot')||rcpNorm(h)==='altoagot'||(/(alto_?agotamiento|agotamiento_?binary)/i.test(h))); })();
+    // Engagement: usa ALTO_ENGAGEMENT (3 sub-dims ≥5 simult.), NUNCA VIGOR_BINARY (solo vigor ≥5, sobreestima).
+    // Agotamiento: prioriza EXHAUSTED_BYNARY si existe esa col exacta; si no, cae a ALTO_AGOTAMIENTO/variantes.
+    const engBinIdx  = rcpColIdxFuzzy('ALTO_ENGAGEMENT');
+    const agoBinIdx  = (()=>{ const i=rcpColIdxFuzzy('EXHAUSTED_BYNARY'); return i>=0?i:rcpColIdxFuzzy('ALTO_AGOTAMIENTO'); })();
     const engMedIdx  = (()=>{ const i=rcpColIdxFuzzy('WORK_ENGAGEMENT'); return i>=0?i:RCP.headers.findIndex(h=>/engd9/i.test(h)||rcpNorm(h).replace(/\s/g,'').includes('engagement')); })();
     const agoMedIdx  = (()=>{ const i=rcpColIdxFuzzy('EXHAUSTION'); return i>=0?i:RCP.headers.findIndex(h=>/agotamiento|exhaustion/i.test(h)); })();
 
@@ -7863,7 +7867,7 @@ function rSubDimMean(rows, sub) {
 
 function rCalcAltoEng(rows) {
   // Use ALTO_ENGAGEMENT column (all 3 sub-dims ≥ 5), NOT VIGOR_BINARY (only vigor ≥ 5)
-  const binIdx = R.headers.findIndex(h => /^alto_?engagement$|^altoengagement$|^engagement_?binary$/i.test(rNorm(h).replace(/\s/g,'')));
+  const binIdx = R.headers.findIndex(h => /^(alto_?eng(agement)?|engagement_?binary|high_?engagement)$/i.test(rNorm(h).replace(/\s/g,'')));
   if (binIdx >= 0) {
     const count = rows.filter(r => parseFloat(r[binIdx]) === 1).length;
     return rows.length ? Math.round(count / rows.length * 100) : null;
@@ -7879,7 +7883,11 @@ function rCalcAltoEng(rows) {
 }
 
 function rCalcAltoAgo(rows) {
-  const binIdx = R.headers.findIndex(h => /exhausted_bynary|alto_agotamiento|altoagotamiento|agotamiento_binary/i.test(rNorm(h).replace(/\s/g,'')));
+  // Prioridad: EXHAUSTED_BYNARY (u otra variante "exhausted") si existe esa col exacta;
+  // si no, cae a ALTO_AGOTAMIENTO/variantes ("alto agot", "agotamiento_binary", etc.)
+  const exhaustedIdx = R.headers.findIndex(h => /^(exhausted_?b[iy]nary|high_?exhaustion)$/i.test(rNorm(h).replace(/\s/g,'')));
+  const altoAgotIdx  = R.headers.findIndex(h => /^(alto_?agot(amiento)?|agotamiento_?binary|high_?agotamiento)$/i.test(rNorm(h).replace(/\s/g,'')));
+  const binIdx = exhaustedIdx >= 0 ? exhaustedIdx : altoAgotIdx;
   if (binIdx >= 0) {
     const count = rows.filter(r => parseFloat(r[binIdx]) === 1).length;
     return rows.length ? Math.round(count / rows.length * 100) : null;
