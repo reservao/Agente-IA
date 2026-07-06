@@ -8732,24 +8732,44 @@ function ropCalcEng(rows) {
   if (!dim) return {avg:null, pct:null};
   let qCols = dim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
   if (!qCols.length && dim.altPreguntas) qCols = dim.altPreguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
-  if (!qCols.length) {
-    // Fallback: usar columna pre-calculada
+
+  // Promedio general (todos los ítems / columna pre-calculada)
+  let avg = null;
+  if (qCols.length) {
+    const vals = rows.map(r => {
+      const vs = qCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
+      return vs.length ? vs.reduce((a,b)=>a+b,0)/vs.length : null;
+    }).filter(v => v !== null);
+    if (vals.length) avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+  } else {
     const sysCol = findSysCol(dim, ROP.headers);
-    if (!sysCol) return {avg:null, pct:null};
-    const idx = ROP.headers.indexOf(sysCol);
-    const vals = rows.map(r => parseFloat(r[idx])).filter(v => !isNaN(v));
-    if (!vals.length) return {avg:null, pct:null};
-    const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
-    const pct = vals.filter(v => v >= 4.5).length / vals.length * 100;
-    return {avg, pct};
+    if (sysCol) {
+      const idx = ROP.headers.indexOf(sysCol);
+      const vals = rows.map(r => parseFloat(r[idx])).filter(v => !isNaN(v));
+      if (vals.length) avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+    }
   }
-  const vals = rows.map(r => {
-    const vs = qCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
-    return vs.length ? vs.reduce((a,b)=>a+b,0)/vs.length : null;
-  }).filter(v => v !== null);
-  if (!vals.length) return {avg:null, pct:null};
-  const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
-  const pct = vals.filter(v => v >= 4.5).length / vals.length * 100;
+  if (avg === null) return {avg:null, pct:null};
+
+  // % Alto Engagement: usa col binaria ALTO_ENGAGEMENT si existe (NUNCA VIGOR_BINARY,
+  // que solo mide vigor y sobreestima). Si no existe, calcula per-persona:
+  // Vigor, Dedicación y Absorción promedian >= 5 simultáneamente.
+  let pct = null;
+  const binIdx = ROP.headers.findIndex(h => /^(alto_?eng(agement)?|engagement_?binary|high_?engagement)$/i.test(norm(h).replace(/[_\s]/g,'')));
+  if (binIdx >= 0) {
+    const vals = rows.map(r => parseFloat(r[binIdx])).filter(v => !isNaN(v));
+    if (vals.length) pct = vals.filter(v => v === 1).length / vals.length * 100;
+  } else {
+    const subGroups = [['WE1','WE2','WE5'], ['WE3','WE4','WE7'], ['WE6','WE8','WE9']];
+    const subCols = subGroups.map(g => g.map(q => findCol(q, ROP.headers)).filter(Boolean));
+    if (subCols.every(g => g.length) && rows.length) {
+      const count = rows.filter(r => subCols.every(cols => {
+        const vs = cols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
+        return vs.length && vs.reduce((a,b)=>a+b,0)/vs.length >= 5;
+      })).length;
+      pct = count / rows.length * 100;
+    }
+  }
   return {avg, pct};
 }
 
@@ -8758,24 +8778,41 @@ function ropCalcAgot(rows) {
   if (!dim) return {avg:null, pct:null};
   let qCols = dim.preguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
   if (!qCols.length && dim.altPreguntas) qCols = dim.altPreguntas.map(q => findCol(q, ROP.headers)).filter(Boolean);
-  if (!qCols.length) {
-    // Fallback: usar columna pre-calculada
+
+  // Promedio general (todos los ítems / columna pre-calculada)
+  let avg = null;
+  if (qCols.length) {
+    const vals = rows.map(r => {
+      const vs = qCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
+      return vs.length ? vs.reduce((a,b)=>a+b,0)/vs.length : null;
+    }).filter(v => v !== null);
+    if (vals.length) avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+  } else {
     const sysCol = findSysCol(dim, ROP.headers);
-    if (!sysCol) return {avg:null, pct:null};
-    const idx = ROP.headers.indexOf(sysCol);
-    const vals = rows.map(r => parseFloat(r[idx])).filter(v => !isNaN(v));
-    if (!vals.length) return {avg:null, pct:null};
-    const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
-    const pct = vals.filter(v => v >= 3.0).length / vals.length * 100;
-    return {avg, pct};
+    if (sysCol) {
+      const idx = ROP.headers.indexOf(sysCol);
+      const vals = rows.map(r => parseFloat(r[idx])).filter(v => !isNaN(v));
+      if (vals.length) avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+    }
   }
-  const vals = rows.map(r => {
-    const vs = qCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
-    return vs.length ? vs.reduce((a,b)=>a+b,0)/vs.length : null;
-  }).filter(v => v !== null);
-  if (!vals.length) return {avg:null, pct:null};
-  const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
-  const pct = vals.filter(v => v >= 3.0).length / vals.length * 100;
+  if (avg === null) return {avg:null, pct:null};
+
+  // % Alto Agotamiento: prioriza col binaria EXHAUSTED_BYNARY si existe;
+  // si no, ALTO_AGOTAMIENTO/variantes; si no, calcula per-persona: avg(EX1-EX4) >= 3.25
+  let pct = null;
+  const exhaustedIdx = ROP.headers.findIndex(h => /^(exhausted_?b[iy]nary|high_?exhaustion)$/i.test(norm(h).replace(/[_\s]/g,'')));
+  const altoAgotIdx  = ROP.headers.findIndex(h => /^(alto_?agot(amiento)?|agotamiento_?binary|high_?agotamiento)$/i.test(norm(h).replace(/[_\s]/g,'')));
+  const binIdx = exhaustedIdx >= 0 ? exhaustedIdx : altoAgotIdx;
+  if (binIdx >= 0) {
+    const vals = rows.map(r => parseFloat(r[binIdx])).filter(v => !isNaN(v));
+    if (vals.length) pct = vals.filter(v => v === 1).length / vals.length * 100;
+  } else if (qCols.length && rows.length) {
+    const vals = rows.map(r => {
+      const vs = qCols.map(c => parseFloat(r[ROP.headers.indexOf(c)])).filter(v => !isNaN(v));
+      return vs.length ? vs.reduce((a,b)=>a+b,0)/vs.length : null;
+    }).filter(v => v !== null);
+    if (vals.length) pct = vals.filter(v => v >= 3.25).length / vals.length * 100;
+  }
   return {avg, pct};
 }
 
