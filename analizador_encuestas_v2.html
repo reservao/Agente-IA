@@ -7299,7 +7299,8 @@ function rcpGenerate() {
       .sort((a,b)=>{ const ia=DEM_ORDER.indexOf(a.col),ib=DEM_ORDER.indexOf(b.col); return (ia<0?999:ia)-(ib<0?999:ib); });
 
     // ── Binary flag columns ───────────────────────────────────────────────
-    const engBinIdx  = (()=>{ const i=rcpColIdxFuzzy('VIGOR_BINARY'); return i>=0?i:RCP.headers.findIndex(h=>/(alto_?engagement|engagement_?binary)/i.test(h)); })();
+    // Use ALTO_ENGAGEMENT (all 3 sub-dims ≥ 5), NOT VIGOR_BINARY (only vigor ≥ 5)
+    const engBinIdx  = (()=>{ const i=rcpColIdxFuzzy('ALTO_ENGAGEMENT'); return i>=0?i:RCP.headers.findIndex(h=>/^alto_?engagement$|^altoengagement$/i.test(rcpNorm(h).replace(/\s/g,''))); })();
     const agoBinIdx  = (()=>{ const i=rcpColIdxFuzzy('EXHAUSTED_BYNARY'); return i>=0?i:RCP.headers.findIndex(h=>rcpNorm(h).includes('altoagot')||rcpNorm(h)==='altoagot'||(/(alto_?agotamiento|agotamiento_?binary)/i.test(h))); })();
     const engMedIdx  = (()=>{ const i=rcpColIdxFuzzy('WORK_ENGAGEMENT'); return i>=0?i:RCP.headers.findIndex(h=>/engd9/i.test(h)||rcpNorm(h).replace(/\s/g,'').includes('engagement')); })();
     const agoMedIdx  = (()=>{ const i=rcpColIdxFuzzy('EXHAUSTION'); return i>=0?i:RCP.headers.findIndex(h=>/agotamiento|exhaustion/i.test(h)); })();
@@ -7859,7 +7860,8 @@ function rSubDimMean(rows, sub) {
 }
 
 function rCalcAltoEng(rows) {
-  const binIdx = R.headers.findIndex(h => /vigor_binary|alto_engagement|altoengagement|engagement_binary/i.test(rNorm(h).replace(/\s/g,'')));
+  // Use ALTO_ENGAGEMENT column (all 3 sub-dims ≥ 5), NOT VIGOR_BINARY (only vigor ≥ 5)
+  const binIdx = R.headers.findIndex(h => /^alto_?engagement$|^altoengagement$|^engagement_?binary$/i.test(rNorm(h).replace(/\s/g,'')));
   if (binIdx >= 0) {
     const count = rows.filter(r => parseFloat(r[binIdx]) === 1).length;
     return rows.length ? Math.round(count / rows.length * 100) : null;
