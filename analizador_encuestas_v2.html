@@ -6053,7 +6053,9 @@ function rcpGenerate() {
     const hideLow  = hideEl ? hideEl.value === 'hide' : false;
 
     const mainCol  = isEng ? 'WORK_ENGAGEMENT' : 'EXHAUSTION';
-    const binaryCol= isEng ? 'VIGOR_BINARY'    : 'EXHAUSTED_BYNARY';
+    // ALTO_ENGAGEMENT = 3 sub-dims (Vigor, Dedicación, Absorción) ≥5 simultáneamente.
+    // NOT VIGOR_BINARY, que solo mide Vigor ≥5 y sobreestima el %.
+    const binaryCol= isEng ? 'ALTO_ENGAGEMENT' : 'EXHAUSTED_BYNARY';
     const barColor = isEng ? '#1B3F6E' : '#A8442B';
     const barTop   = isEng ? 'rgba(27,63,110,0.98)' : 'rgba(168,68,43,0.98)';
     const barBot   = isEng ? 'rgba(27,63,110,0.78)' : 'rgba(168,68,43,0.78)';
