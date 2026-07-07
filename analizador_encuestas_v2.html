@@ -9222,9 +9222,9 @@ const ropEnpsBadgePlugin = {
     const scores = chart.config._enpsScores;
     const n = chart.data.labels.length;
     const rowH = (chartArea.bottom - chartArea.top) / Math.max(n, 1);
-    const r = Math.min(44, Math.floor(rowH * 0.42));
-    const fontSize = Math.max(10, Math.min(16, Math.floor(r * 0.42)));
-    const xOff = r + 8;
+    const r = Math.min(52, Math.floor(rowH * 0.48));
+    const fontSize = Math.max(13, Math.min(20, Math.floor(r * 0.46)));
+    const xOff = r + 10;
     chart.data.labels.forEach((_, i) => {
       const score = scores[i];
       if (score == null) return;
@@ -9239,7 +9239,7 @@ const ropEnpsBadgePlugin = {
       ctx.font = `bold ${fontSize}px Inter,sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText((score>=0?'+':'')+Math.round(score), x, y);
+      ctx.fillText((score>=0?'+':'')+Math.round(score)+'%', x, y);
       ctx.restore();
     });
     ctx.save();
@@ -9517,7 +9517,7 @@ function ropRenderENPS(filterSets) {
     options:{
       indexAxis:'y',
       responsive:true, maintainAspectRatio:false,
-      layout:{ padding:{ top:22, right:110, bottom:18 } },
+      layout:{ padding:{ top:22, right:130, bottom:18 } },
       plugins:{
         legend:{
           display:true, position:'bottom',
