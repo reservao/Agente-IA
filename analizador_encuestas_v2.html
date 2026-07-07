@@ -4240,8 +4240,9 @@ function rProcess(wb, filename) {
     R.medCol       = medCol;
   } else {
     // Sin columna de medición detectada → tratar como medición única
-    medCount = { 'Medición única': R.rows.length };
-    R.mediciones = ['Medición única'];
+    // (etiqueta corta "Medición" para no generar ruido en tablas/gráficos)
+    medCount = { 'Medición': R.rows.length };
+    R.mediciones = ['Medición'];
     R.medCol     = '__single__';
   }
   R.selectedMeds = [...R.mediciones];
@@ -4585,8 +4586,8 @@ function rcProcess(wb, filename) {
   } else {
     RC.medCol = '__single__';
     RC._singleMed = true;
-    RC.mediciones = ['Medición única'];
-    RC.selectedMeds = ['Medición única'];
+    RC.mediciones = ['Medición'];
+    RC.selectedMeds = ['Medición'];
 
     document.getElementById('rc-fname').textContent = filename;
     document.getElementById('rc-fmeta').textContent = RC.rows.length + ' personas · medición única';
@@ -4594,7 +4595,7 @@ function rcProcess(wb, filename) {
     document.getElementById('rc-med-list').innerHTML = `
       <label style="display:flex;align-items:center;gap:10px;padding:.4rem .75rem;border:1px solid var(--accent-border);border-radius:var(--radius-sm);font-size:13px;background:var(--accent-light)">
         <input type="checkbox" checked disabled style="width:14px;height:14px;accent-color:var(--accent)">
-        <span style="flex:1;font-weight:500">Medición única</span>
+        <span style="flex:1;font-weight:500">Medición</span>
         <span style="font-size:11px;color:var(--text2)">${RC.rows.length} personas</span>
       </label>`;
   }
@@ -4669,7 +4670,7 @@ function rcGenerate() {
 
   const rowsByMed = {};
   if (RC._singleMed) {
-    rowsByMed['Medición única'] = RC.rows;
+    rowsByMed['Medición'] = RC.rows;
   } else {
     const medIdx = RC.headers.indexOf(RC.medCol);
     RC.selectedMeds.forEach(m => {
@@ -5238,8 +5239,8 @@ function rcpProcess(wb, filename) {
   } else {
     RCP.medCol = '__single__';
     RCP._singleMed = true;
-    mc['Medición única'] = RCP.rows.length;
-    RCP.mediciones = ['Medición única'];
+    mc['Medición'] = RCP.rows.length;
+    RCP.mediciones = ['Medición'];
   }
 
   document.getElementById('rcp-fname').textContent=filename;
@@ -8493,11 +8494,13 @@ function ropProcess(file) {
 
 function ropBuildFilters() {
   const medCol = detectMedicionCol(ROP.headers);
-  // Sin columna de medición detectada: fallback a "Medición única" (mismo patrón que
-  // Tablas Excel / RCP), para que el selector no quede vacío sin opciones.
+  // Sin columna de medición detectada: fallback a "Medición" (mismo patrón que
+  // Tablas Excel / RCP), para que el selector no quede vacío sin opciones. Se usa
+  // la etiqueta corta "Medición" (no "Medición única") para no generar ruido en
+  // títulos y gráficos cuando de todos modos solo hay una.
   ROP.mediciones = medCol
     ? [...new Set(ROP.rows.map(r => String(r[ROP.headers.indexOf(medCol)]).trim()).filter(Boolean))].sort()
-    : ['Medición única'];
+    : ['Medición'];
 
   const skip = new Set([medCol]);
   // "emoc"→"emo" (los ítems son emo1..emo6, no arrancan con "emoc"); se agregan
