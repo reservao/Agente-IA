@@ -1218,6 +1218,19 @@ tr:hover td { background: var(--bg); }
           <input type="text" id="rc-title" placeholder="Ej: Engagement histórico por área"
                  style="width:100%;padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);margin-bottom:1rem">
 
+          <!-- 7. Opciones de exportación -->
+          <div class="slbl">7. Exportación</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:1.25rem">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+              <input type="checkbox" id="rc-hide-title" style="cursor:pointer;accent-color:var(--accent)">
+              Ocultar título del gráfico
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+              <input type="checkbox" id="rc-hide-medlabel" style="cursor:pointer;accent-color:var(--accent)">
+              Ocultar etiqueta de Medición
+            </label>
+          </div>
+
           <button class="btn btn-primary" onclick="rcGenerate()">Generar gráfico →</button>
         </div>
 
@@ -1284,6 +1297,12 @@ tr:hover td { background: var(--bg); }
             <button id="rop-btn-sync" class="btn btn-secondary" style="font-size:12px;display:none" onclick="ropSyncSegments()">↔ Sincronizar segmento</button>
             <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px;margin-left:auto">
               <input type="checkbox" id="rop-show-org" checked> Mostrar promedio organizacional
+            </label>
+            <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="rop-hide-title"> Ocultar título del gráfico
+            </label>
+            <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="rop-hide-medlabel"> Ocultar etiqueta de Medición
             </label>
             <button class="btn btn-primary" onclick="ropGenerate()">🔍 Generar One Page</button>
           </div>
@@ -4684,6 +4703,8 @@ function rcGenerate() {
   const title  = document.getElementById('rc-title').value || '';
   const type   = RC.chartType;
   const rcSort = (document.getElementById('rc-sort')?.value) || 'default';
+  const rcHideTitle    = !!document.getElementById('rc-hide-title')?.checked;
+  const rcHideMedLabel = !!document.getElementById('rc-hide-medlabel')?.checked;
 
   let labels = [], datasets = [];
 
@@ -4714,7 +4735,7 @@ function rcGenerate() {
         x: parseFloat(r[vXIdx]),
         y: parseFloat(r[vYIdx])
       })).filter(p => !isNaN(p.x) && !isNaN(p.y)) : [];
-      datasets.push({ label: m, data: pts, backgroundColor: RC_PALETTE[mi%RC_PALETTE.length]+'99', pointRadius:4 });
+      datasets.push({ label: rcHideMedLabel ? '' : m, data: pts, backgroundColor: RC_PALETTE[mi%RC_PALETTE.length]+'99', pointRadius:4 });
     });
     labels = [];
 
@@ -4731,7 +4752,7 @@ function rcGenerate() {
           const rows = rowsByMed[m].filter(r => String(r[segIdx]||'').trim() === seg);
           return rows.length ? rcGetVal(rows, selVars[0]) : null;
         });
-        datasets.push({ label: m, data, backgroundColor: RC_PALETTE[mi%RC_PALETTE.length]+'CC',
+        datasets.push({ label: rcHideMedLabel ? '' : m, data, backgroundColor: RC_PALETTE[mi%RC_PALETTE.length]+'CC',
           borderColor: RC_PALETTE[mi%RC_PALETTE.length], borderWidth:1.5 });
       });
     } else {
@@ -4815,7 +4836,7 @@ function rcGenerate() {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        title: { display: !!title, text: title, font:{size:14, weight:'bold'}, color:'#1A1916', padding:{bottom:16} },
+        title: { display: !!title && !rcHideTitle, text: title, font:{size:14, weight:'bold'}, color:'#1A1916', padding:{bottom:16} },
         legend: { position:'bottom', labels:{font:{size:11}, padding:16} },
         tooltip: { callbacks: {
           label: ctx => {
@@ -5511,6 +5532,24 @@ function renderRcpParams() {
     }
     html += '</div>';
   }
+
+  // Opciones de limpieza para exportación — aplican a cualquier tipo de gráfico
+  const prevHideTitle = document.getElementById('rcp_hide_title')?.checked;
+  const prevHideMed    = document.getElementById('rcp_hide_medlabel')?.checked;
+  html += `<div style="margin-bottom:1rem;padding-top:6px;border-top:1px solid var(--border)">
+    <div class="slbl" style="margin-top:8px">Exportación</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="rcp_hide_title" style="cursor:pointer;accent-color:var(--accent)"${prevHideTitle?' checked':''}>
+        Ocultar título del gráfico
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="rcp_hide_medlabel" style="cursor:pointer;accent-color:var(--accent)"${prevHideMed?' checked':''}>
+        Ocultar etiqueta de Medición
+      </label>
+    </div>
+  </div>`;
+
   document.getElementById('rcp-params').innerHTML = html;
 }
 
@@ -5715,7 +5754,7 @@ function rcpEnpsRefresh() {
   if(state.nmin > 0 && state.hideLow) visible = visible.filter(g => g.n >= state.nmin);
   visible = rcpEnpsSort(visible, state.sort);
 
-  const labels    = visible.map(g => g.baseLabel + ' (N='+g.n+')');
+  const labels    = visible.map(g => (g.baseLabel ? g.baseLabel+' ' : '') + '(N='+g.n+')');
   const promoD=[], neutroD=[], detrD=[];
   visible.forEach(g => {
     if(state.nmin > 0 && g.n < state.nmin) { promoD.push(null); neutroD.push(null); detrD.push(null); }
@@ -6020,6 +6059,10 @@ function rcpGenerate() {
   const def = RCP.currentDef;
   if(!def) return;
 
+  // Opciones de limpieza para exportación — aplican a cualquier tipo de gráfico
+  const rcpHideTitle    = !!document.getElementById('rcp_hide_title')?.checked;
+  const rcpHideMedLabel = !!document.getElementById('rcp_hide_medlabel')?.checked;
+
   if(RCP.chart){RCP.chart.destroy();RCP.chart=null;}
   RCP._chartState = null;
   RCP._enpsState = null;
@@ -6088,14 +6131,14 @@ function rcpGenerate() {
         segVals.forEach(sv => {
           const filtered = rcpRowsByMed(m).filter(r=>String(r[segIdx]||'').trim()===sv);
           if(filtered.length > 0) {
-            chartLabels.push(isSingleMed ? sv : m + ' · ' + sv);
+            chartLabels.push(isSingleMed ? sv : (rcpHideMedLabel ? sv : m + ' · ' + sv));
             chartRowGroups.push(filtered);
           }
         });
       });
     } else {
       meds.forEach(m => {
-        chartLabels.push(isSingleMed ? (RCP._singleName || 'Medición') : m);
+        chartLabels.push(rcpHideMedLabel ? '' : (isSingleMed ? (RCP._singleName || 'Medición') : m));
         chartRowGroups.push(rcpRowsByMed(m));
       });
     }
@@ -6225,7 +6268,7 @@ function rcpGenerate() {
         maintainAspectRatio: false,
         layout: { padding: { bottom: 30, left: 5, right: 20 } },
         plugins: {
-          title: { display: true, text: def.nombre, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
+          title: { display: !rcpHideTitle, text: def.nombre, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
           legend: { display: benchDatasets.length > 0, position:'bottom', labels:{font:{size:11},padding:14} },
           tooltip: { callbacks: {
             label: ctx => {
@@ -6421,7 +6464,7 @@ function rcpGenerate() {
         responsive: true, maintainAspectRatio: false,
         layout: { padding: { top: 24, bottom: 36, left: 24, right: 40 } },
         plugins: {
-          title: { display: true, text: def.nombre, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
+          title: { display: !rcpHideTitle, text: def.nombre, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
           legend: { position: 'bottom', labels: { font:{size:11}, padding:14 } },
         },
         scales: {
@@ -6559,7 +6602,7 @@ function rcpGenerate() {
       const segIdx = RCP.headers.indexOf(segCol);
       if(segIdx >= 0) mainRows = mainRows.filter(r => String(r[segIdx]||'').trim() === segVal);
     }
-    const mainLabel = segVal ? (segCol+': '+segVal) : med;
+    const mainLabel = segVal ? (segCol+': '+segVal) : (rcpHideMedLabel ? '' : med);
 
     // Per-dimension colors
     const barBg     = dims.map(d => (RD_COLORS[d.col] || ['rgba(27,63,110,0.85)','rgba(27,63,110,1)'])[0]);
@@ -6704,7 +6747,7 @@ function rcpGenerate() {
         responsive: true, maintainAspectRatio: false,
         layout: { padding: { top: 16, bottom: 20, left: 5, right: 20 } },
         plugins: {
-          title: { display:true, text:def.nombre, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
+          title: { display: !rcpHideTitle, text:def.nombre, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
           legend: { position:'bottom', labels:{ font:{size:11}, padding:14,
             generateLabels(chart) {
               return chart.data.datasets.map((ds,i)=>({
@@ -6811,7 +6854,7 @@ function rcpGenerate() {
     } else if(seg === '__org__') {
       rawGroups.push({baseLabel:'Organización', rows:meds.flatMap(m=>rcpRowsByMed(m))});
     } else {
-      meds.forEach(m=>{ rawGroups.push({baseLabel:m, rows:rcpRowsByMed(m)}); });
+      meds.forEach(m=>{ rawGroups.push({baseLabel: rcpHideMedLabel ? '' : m, rows:rcpRowsByMed(m)}); });
     }
 
     // Enrich groups with n + enps values
@@ -6834,7 +6877,7 @@ function rcpGenerate() {
       tagIdx, enpsCategory
     };
 
-    const labels    = groups.map(g => g.baseLabel + ' (N='+g.n+')');
+    const labels    = groups.map(g => (g.baseLabel ? g.baseLabel+' ' : '') + '(N='+g.n+')');
     const promoD=[], neutroD=[], detrD=[];
     groups.forEach(g=>{
       if(nmin>0 && g.n<nmin){ promoD.push(null); neutroD.push(null); detrD.push(null); }
@@ -7112,7 +7155,7 @@ function rcpGenerate() {
         responsive:true, maintainAspectRatio:false,
         layout:{ padding:{ top:16, bottom:16, left:0, right:44 } },
         plugins:{
-          title:{ display:true, text:def.nombre+' — '+claLabel, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
+          title:{ display: !rcpHideTitle, text:def.nombre+' — '+claLabel, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
           legend:{ display:true, position:'bottom', labels:{font:{size:11}, padding:14} },
           tooltip:{ callbacks:{ label: ctx => {
             const n = nPerGroupRC[ctx.dataIndex];
@@ -7261,7 +7304,7 @@ function rcpGenerate() {
       }
     };
 
-    const ocTitle = def.nombre + (segVal ? (' — '+segCol+': '+segVal) : (' — '+med));
+    const ocTitle = def.nombre + (segVal ? (' — '+segCol+': '+segVal) : (rcpHideMedLabel ? '' : (' — '+med)));
     chartCfg = {
       type: 'bar',
       data: { labels: ocLabels, datasets: ocDatasets },
@@ -7269,7 +7312,7 @@ function rcpGenerate() {
         responsive: true, maintainAspectRatio: false,
         layout: { padding: { top:16, bottom:20, left:5, right:20 } },
         plugins: {
-          title: { display:true, text:ocTitle, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
+          title: { display: !rcpHideTitle, text:ocTitle, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
           legend: { position:'bottom', labels:{ font:{size:11}, padding:14 } },
           tooltip: { callbacks:{ label: ctx=>ctx.dataset.label+': '+(ctx.raw!==null?(+ctx.raw).toFixed(2):'—') } },
         },
@@ -7517,7 +7560,7 @@ function rcpGenerate() {
     document.getElementById('rcp-table-wrap').style.display = 'block';
     document.getElementById('rcp-canvas-inner').style.display = 'none';
 
-    document.getElementById('rcp-preview-lbl').textContent = def.nombre + ' — ' + med;
+    document.getElementById('rcp-preview-lbl').textContent = rcpHideTitle ? '' : (def.nombre + (rcpHideMedLabel ? '' : (' — ' + med)));
     document.getElementById('rcp-preview-wrap').style.display = 'block';
     document.getElementById('rcp-preview-wrap').scrollIntoView({behavior:'smooth'});
     const toolsElDem = document.getElementById('rcp-enps-tools');
@@ -7553,7 +7596,7 @@ function rcpBaseOptions(title, stacked, yAxis) {
   return {
     responsive:true, maintainAspectRatio:false,
     plugins:{
-      title:{display:!!title, text:title, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12}},
+      title:{display: !!title && !document.getElementById('rcp_hide_title')?.checked, text:title, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12}},
       legend:{position:'bottom', labels:{font:{size:11},padding:14}},
     },
     scales:{
@@ -8878,6 +8921,9 @@ function ropCalcEnps(rows) {
 
 function ropGenerate() {
   const showOrg = document.getElementById('rop-show-org').checked;
+  // Opciones de limpieza para exportación
+  const ropHideTitle    = !!document.getElementById('rop-hide-title')?.checked;
+  const ropHideMedLabel = !!document.getElementById('rop-hide-medlabel')?.checked;
 
   // Sync DOM values into state
   ROP.filters.forEach((f, fi) => {
@@ -8892,15 +8938,17 @@ function ropGenerate() {
     const rows = ropFilterRows(ROP.rows, f.medicion, f.clasificaciones);
     const orgRows = ropFilterRows(ROP.rows, f.medicion, null);
     const segs = f.clasificaciones.filter(c => c.clascol && c.segmento).map(c => c.segmento);
-    const titleLabel = segs.length ? segs.join(' › ') : f.medicion;
-    return { rows, orgRows, label: f.medicion, titleLabel };
+    const medLabel = ropHideMedLabel ? '' : f.medicion;
+    const titleLabel = segs.length ? segs.join(' › ') : medLabel;
+    return { rows, orgRows, label: medLabel, titleLabel };
   });
 
   if (!filterSets[0].rows.length) { alert('No hay datos para la selección base.'); return; }
 
   const title = filterSets.map(fs => fs.titleLabel).join(' vs. ');
-  document.getElementById('rop-title-bar').textContent = title;
-  document.getElementById('rop-seg-title').textContent = filterSets[0].titleLabel;
+  document.getElementById('rop-title-bar').textContent = ropHideTitle ? '' : title;
+  // rop-seg-title está DENTRO del marco capturable — controla lo que aparece en el PNG/PPT exportado
+  document.getElementById('rop-seg-title').textContent = ropHideTitle ? '' : filterSets[0].titleLabel;
 
   Object.keys(ROP.charts).forEach(k => { if (ROP.charts[k]) { ROP.charts[k].destroy(); ROP.charts[k]=null; } });
 
@@ -9221,7 +9269,7 @@ function ropRenderEng(filterSets, showOrg) {
   } else { sumEl.style.display = 'none'; }
 
   const filterMetaEng = filterSets.map(fs => fs.rows.length === 0 ? 'nodata' : fs.rows.length < ROP_N_MIN ? 'confidential' : 'ok');
-  const labels = filterSets.map(fs => [fs.label, `N=${fs.rows.length}`]);
+  const labels = filterSets.map(fs => [fs.label, `N=${fs.rows.length}`].filter(Boolean));
   const engVals = filterSets.map(fs => ropCalcEng(fs.rows));
 
   ROP.charts.eng = new Chart(document.getElementById('rop-chart-eng'), {
@@ -9264,7 +9312,7 @@ function ropRenderAgot(filterSets, showOrg) {
   } else { sumEl.style.display = 'none'; }
 
   const filterMetaAgot = filterSets.map(fs => fs.rows.length === 0 ? 'nodata' : fs.rows.length < ROP_N_MIN ? 'confidential' : 'ok');
-  const labels = filterSets.map(fs => [fs.label, `N=${fs.rows.length}`]);
+  const labels = filterSets.map(fs => [fs.label, `N=${fs.rows.length}`].filter(Boolean));
   const agotVals = filterSets.map(fs => ropCalcAgot(fs.rows));
 
   ROP.charts.agot = new Chart(document.getElementById('rop-chart-agot'), {
@@ -9569,10 +9617,12 @@ function ropBatchBuildList(clasCols, mode, rowPool, accumulated) {
 
 // Renderiza el One Page para un conjunto de filtros y captura la imagen.
 async function ropBatchRenderOne(filterSpec) {
+  const ropHideTitle    = !!document.getElementById('rop-hide-title')?.checked;
+  const ropHideMedLabel = !!document.getElementById('rop-hide-medlabel')?.checked;
   const medicion = ROP.filters[0]?.medicion;
   const rows    = ropFilterRows(ROP.rows, medicion, filterSpec.clasificaciones);
   const orgRows = ropFilterRows(ROP.rows, medicion, null);
-  const filterSets = [{ rows, orgRows, label: medicion || '', titleLabel: filterSpec.titleLabel }];
+  const filterSets = [{ rows, orgRows, label: ropHideMedLabel ? '' : (medicion || ''), titleLabel: filterSpec.titleLabel }];
 
   // Destruir gráficos previos
   Object.keys(ROP.charts).forEach(k => { if (ROP.charts[k]) { ROP.charts[k].destroy(); ROP.charts[k] = null; } });
@@ -9581,9 +9631,9 @@ async function ropBatchRenderOne(filterSpec) {
   const enpsC = document.getElementById('rop-chart-enps');
   if (enpsC) enpsC.getContext('2d').clearRect(0, 0, enpsC.width, enpsC.height);
 
-  // Actualizar títulos
-  document.getElementById('rop-title-bar').textContent = filterSpec.titleLabel;
-  document.getElementById('rop-seg-title').textContent  = filterSpec.titleLabel;
+  // Actualizar títulos (rop-seg-title está dentro del marco capturable)
+  document.getElementById('rop-title-bar').textContent = ropHideTitle ? '' : filterSpec.titleLabel;
+  document.getElementById('rop-seg-title').textContent  = ropHideTitle ? '' : filterSpec.titleLabel;
 
   // Renderizar
   const showOrg = document.getElementById('rop-show-org')?.checked ?? true;
