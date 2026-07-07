@@ -9269,7 +9269,7 @@ function ropRenderEng(filterSets, showOrg) {
   } else { sumEl.style.display = 'none'; }
 
   const filterMetaEng = filterSets.map(fs => fs.rows.length === 0 ? 'nodata' : fs.rows.length < ROP_N_MIN ? 'confidential' : 'ok');
-  const labels = filterSets.map(fs => [fs.label, `N=${fs.rows.length}`].filter(Boolean));
+  const labels = filterSets.map(fs => [(fs.titleLabel || fs.label), `N=${fs.rows.length}`].filter(Boolean));
   const engVals = filterSets.map(fs => ropCalcEng(fs.rows));
 
   ROP.charts.eng = new Chart(document.getElementById('rop-chart-eng'), {
@@ -9312,7 +9312,7 @@ function ropRenderAgot(filterSets, showOrg) {
   } else { sumEl.style.display = 'none'; }
 
   const filterMetaAgot = filterSets.map(fs => fs.rows.length === 0 ? 'nodata' : fs.rows.length < ROP_N_MIN ? 'confidential' : 'ok');
-  const labels = filterSets.map(fs => [fs.label, `N=${fs.rows.length}`].filter(Boolean));
+  const labels = filterSets.map(fs => [(fs.titleLabel || fs.label), `N=${fs.rows.length}`].filter(Boolean));
   const agotVals = filterSets.map(fs => ropCalcAgot(fs.rows));
 
   ROP.charts.agot = new Chart(document.getElementById('rop-chart-agot'), {
@@ -9500,7 +9500,7 @@ function ropRenderENPS(filterSets) {
     s.rows.length === 0 ? 'nodata' : s.rows.length < ROP_N_MIN ? 'confidential' : !s.enps ? 'nodata' : 'ok'
   );
 
-  const chartLabels = allSets.map(s => s.label);
+  const chartLabels = allSets.map(s => s.titleLabel || s.label);
   const scores = allSets.map(s => s.enps?.score ?? null);
 
   const pct = (key) => allSets.map((s, i) => filterMetaEnps[i] === 'ok' ? s.enps[key] / s.enps.total * 100 : null);
