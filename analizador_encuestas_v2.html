@@ -8493,12 +8493,22 @@ function ropProcess(file) {
 
 function ropBuildFilters() {
   const medCol = detectMedicionCol(ROP.headers);
-  ROP.mediciones = medCol ? [...new Set(ROP.rows.map(r => String(r[ROP.headers.indexOf(medCol)]).trim()).filter(Boolean))].sort() : [];
+  // Sin columna de medición detectada: fallback a "Medición única" (mismo patrón que
+  // Tablas Excel / RCP), para que el selector no quede vacío sin opciones.
+  ROP.mediciones = medCol
+    ? [...new Set(ROP.rows.map(r => String(r[ROP.headers.indexOf(medCol)]).trim()).filter(Boolean))].sort()
+    : ['Medición única'];
 
   const skip = new Set([medCol]);
-  const systemPattern = /^(SE|WE|EX|wp|soc|feedb|hassle|rolcon|oppor|coach|retro|colab|auto|agot|opt|press|cogn|emoc|conf|trab|ENG|NPS|enps|riesgo|alto|bajo|binary|bynary)/i;
+  // "emoc"→"emo" (los ítems son emo1..emo6, no arrancan con "emoc"); se agregan
+  // vigor/absor/dedic/crit para cubrir VIGOR, ABSORTION/ABSORCION, DEDICATION/DEDICACION
+  // y sus variantes _BINARY, más CRIT ENG/AGOT/ORG.
+  const systemPattern = /^(SE|WE|EX|wp|soc|feedb|hassle|rolcon|oppor|coach|retro|colab|auto|agot|opt|press|cogn|emo|conf|trab|ENG|NPS|enps|riesgo|alto|bajo|binary|bynary|vigor|absor|dedic|crit)/i;
   ROP.clasCols = ROP.headers.filter(h => {
     if (!h || skip.has(h)) return false;
+    // Columnas de dimensión JDR pre-calculada, ej. "(demandasemocionales-jdr) - Demandas Emocionales":
+    // el código entre paréntesis no arranca con ningún prefijo conocido, pero siempre incluye "jdr".
+    if (/jdr/i.test(h)) return false;
     if (systemPattern.test(h)) return false;
     // También verificar con nombre normalizado (captura formatos como "(WE1) - texto")
     if (systemPattern.test(norm(h))) return false;
