@@ -6702,7 +6702,7 @@ function rcpGenerate() {
       data: { labels, datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
-        layout: { padding: { top: 16, bottom: 60, left: 5, right: 20 } },
+        layout: { padding: { top: 16, bottom: 20, left: 5, right: 20 } },
         plugins: {
           title: { display:true, text:def.nombre, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
           legend: { position:'bottom', labels:{ font:{size:11}, padding:14,
@@ -6724,7 +6724,7 @@ function rcpGenerate() {
             grid: { display: false },
             ticks: {
               font:{size:10}, color:'#444',
-              maxRotation:90, minRotation:90, autoSkip:false, padding:24,
+              maxRotation:90, minRotation:90, autoSkip:false, padding:6,
               callback: function(val) {
                 var lbl=this.getLabelForValue(val)||'';
                 var words=lbl.split(' '), lines=[];
@@ -7267,7 +7267,7 @@ function rcpGenerate() {
       data: { labels: ocLabels, datasets: ocDatasets },
       options: {
         responsive: true, maintainAspectRatio: false,
-        layout: { padding: { top:16, bottom:60, left:5, right:20 } },
+        layout: { padding: { top:16, bottom:20, left:5, right:20 } },
         plugins: {
           title: { display:true, text:ocTitle, font:{size:14,weight:'bold'}, color:'#1A1916', padding:{bottom:12} },
           legend: { position:'bottom', labels:{ font:{size:11}, padding:14 } },
@@ -7278,7 +7278,7 @@ function rcpGenerate() {
             grid: { display:false }, border: { display:false },
             ticks: {
               font:{size:10}, color:'#444',
-              maxRotation:90, minRotation:90, autoSkip:false, padding:24,
+              maxRotation:90, minRotation:90, autoSkip:false, padding:6,
               callback: function(val) {
                 var lbl=this.getLabelForValue(val)||'';
                 var words=lbl.split(' '), lines=[];
