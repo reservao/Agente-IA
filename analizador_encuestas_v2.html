@@ -1292,7 +1292,7 @@ tr:hover td { background: var(--bg); }
           </div>
         </div>
         <!-- Marco exterior capturable (incluido en el PNG) -->
-        <div id="rop-export-frame" style="background:#f1f5f9;border-radius:10px;padding:14px;box-shadow:0 2px 12px rgba(0,0,0,0.08);border:1px solid #dde3ec">
+        <div id="rop-export-frame" style="background:#fff">
         <!-- Contenedor capturable — grid 20×10 proporcional -->
         <div id="rop-canvas-wrap" style="position:relative;width:100%;aspect-ratio:2/1;background:#fff;border-radius:var(--radius);border:1px solid #d1d9e0;overflow:visible;min-height:400px;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
 
@@ -9441,7 +9441,7 @@ function ropDownloadPNG() {
   const doCapture = () => {
     const wrap = document.getElementById('rop-export-frame');
     const title = document.getElementById('rop-title-bar').textContent.replace(/[^a-z0-9_\- ]/gi,'').replace(/\s+/g,'_');
-    html2canvas(wrap, {backgroundColor:'#f1f5f9', scale:2}).then(canvas => {
+    html2canvas(wrap, {backgroundColor:'#fff', scale:2}).then(canvas => {
       const link = document.createElement('a');
       link.download = `OnePage_${title || 'reporte'}.png`;
       link.href = canvas.toDataURL('image/png');
@@ -9546,7 +9546,7 @@ async function ropBatchRenderOne(filterSpec) {
 
   // Capturar
   const frame = document.getElementById('rop-export-frame');
-  const canvas = await html2canvas(frame, { backgroundColor: '#f1f5f9', scale: 2, useCORS: true });
+  const canvas = await html2canvas(frame, { backgroundColor: '#fff', scale: 2, useCORS: true });
   return canvas.toDataURL('image/png');
 }
 
