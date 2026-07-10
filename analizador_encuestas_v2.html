@@ -5048,8 +5048,10 @@ const RCP_DEFS = [
     tipo: 'line',
     requiere: ['WORK_ENGAGEMENT','EXHAUSTION'],
     params: [
-      { id:'meds', tipo:'meds_multi', label:'Mediciones a incluir' },
-      { id:'sort', tipo:'sort_line',  label:'Ordenar por' }
+      { id:'meds',    tipo:'meds_multi', label:'Mediciones a incluir' },
+      { id:'nmin',    tipo:'nmin',       label:'N mínimo por medición (confidencialidad)' },
+      { id:'hidelow', tipo:'hidelow',    label:'Mediciones bajo el N mínimo' },
+      { id:'sort',    tipo:'sort_line',  label:'Ordenar por' }
     ]
   },
   {
@@ -5066,6 +5068,7 @@ const RCP_DEFS = [
       { id:'comp_seg',  tipo:'seg_col_rd_comp', label:'Filtrar comparativo por clasificación (opcional)' },
       { id:'comp_lines', tipo:'comp_rd_lines',   label:'Líneas comparativas (promedio org u otro segmento)' },
       { id:'bench_ext',  tipo:'benchmark_manual', label:'Benchmark externo (línea con valores manuales)' },
+      { id:'nmin',       tipo:'nmin',            label:'N mínimo para generar (confidencialidad)' },
     ]
   },
   {
@@ -5093,10 +5096,12 @@ const RCP_DEFS = [
     tipo: 'bar_scatter',
     requiere: ['WORK_ENGAGEMENT','EXHAUSTION'],
     params: [
-      { id:'meds', tipo:'meds_multi',  label:'Mediciones a incluir' },
-      { id:'cla',  tipo:'seg_col',     label:'Agrupar por clasificación' },
-      { id:'sort', tipo:'sort_bar',    label:'Ordenar por' },
-      { id:'scale',tipo:'scale_minmax',label:'Escala del eje valor' }
+      { id:'meds',    tipo:'meds_multi',  label:'Mediciones a incluir' },
+      { id:'cla',     tipo:'seg_col',     label:'Agrupar por clasificación' },
+      { id:'nmin',    tipo:'nmin',        label:'N mínimo por fila (confidencialidad)' },
+      { id:'hidelow', tipo:'hidelow',     label:'Filas bajo el N mínimo' },
+      { id:'sort',    tipo:'sort_bar',    label:'Ordenar por' },
+      { id:'scale',   tipo:'scale_minmax',label:'Escala del eje valor' }
     ]
   },
   {
@@ -5111,6 +5116,7 @@ const RCP_DEFS = [
       { id:'seg',   tipo:'seg_col_rd',   label:'Filtrar por clasificación (opcional)' },
       { id:'sort',  tipo:'sort_bar',     label:'Ordenar por' },
       { id:'scale', tipo:'scale_minmax', label:'Escala del eje valor' },
+      { id:'nmin',  tipo:'nmin',         label:'N mínimo para generar (confidencialidad)' },
     ]
   },
   {
@@ -6447,13 +6453,20 @@ function rcpGenerate() {
   } else if(def.id==='historico_linea') {
     const sortLine = rcpGetParam('sort') || 'default';
     let meds = rcpGetParam('meds') || RCP.mediciones;
+    const nminHL   = parseInt(rcpGetParam('nmin')) || 0;
+    const hideElHL = document.querySelector('input[name="rcp_hidelow"]:checked');
+    const hideLowHL = hideElHL ? hideElHL.value === 'hide' : false;
+    if (hideLowHL && nminHL > 0) meds = meds.filter(m => rcpRowsByMed(m).length >= nminHL);
+    if (!meds.length) { alert('No hay datos para generar el gráfico.'); return; }
     if (sortLine==='alpha_asc')  meds = [...meds].sort((a,b)=>a.localeCompare(b));
     else if (sortLine==='alpha_desc') meds = [...meds].sort((a,b)=>b.localeCompare(a));
+    const maskLowN = m => { const rows = rcpRowsByMed(m); return (nminHL>0 && rows.length<nminHL) ? null : rcpMean(rows,'WORK_ENGAGEMENT'); };
+    const maskLowNAgot = m => { const rows = rcpRowsByMed(m); return (nminHL>0 && rows.length<nminHL) ? null : rcpMean(rows,'EXHAUSTION'); };
     const labels=meds, ds=[
-      {label:'Engagement', data:meds.map(m=>rcpMean(rcpRowsByMed(m),'WORK_ENGAGEMENT')),
+      {label:'Engagement', data:meds.map(maskLowN),
        borderColor:RCP_COLORS.engagement.border, backgroundColor:'transparent',
        pointBackgroundColor:RCP_COLORS.engagement.border, borderWidth:2.5, tension:0.3, pointRadius:5},
-      {label:'Agotamiento', data:meds.map(m=>rcpMean(rcpRowsByMed(m),'EXHAUSTION')),
+      {label:'Agotamiento', data:meds.map(maskLowNAgot),
        borderColor:RCP_COLORS.agotamiento.border, backgroundColor:'transparent',
        pointBackgroundColor:RCP_COLORS.agotamiento.border, borderWidth:2.5, tension:0.3, pointRadius:5},
     ];
@@ -6601,6 +6614,11 @@ function rcpGenerate() {
     if(segCol && segVal) {
       const segIdx = RCP.headers.indexOf(segCol);
       if(segIdx >= 0) mainRows = mainRows.filter(r => String(r[segIdx]||'').trim() === segVal);
+    }
+    const nminRD = parseInt(rcpGetParam('nmin')) || 0;
+    if (nminRD > 0 && mainRows.length < nminRD) {
+      alert(`Confidencial: la selección tiene N=${mainRows.length}, bajo el mínimo definido (${nminRD}). Ajusta el filtro o el N mínimo.`);
+      return;
     }
     const mainLabel = segVal ? (segCol+': '+segVal) : (rcpHideMedLabel ? '' : med);
 
@@ -7064,6 +7082,14 @@ function rcpGenerate() {
         return { g, eng, ago, n:rows.length, criticidad:(ago||0)-(eng||0) };
       });
     }
+    // Confidencialidad por N mínimo
+    const nminRC = parseInt(rcpGetParam('nmin')) || 0;
+    const hideElRC = document.querySelector('input[name="rcp_hidelow"]:checked');
+    const hideLowRC = hideElRC ? hideElRC.value === 'hide' : false;
+    if (nminRC > 0) {
+      if (hideLowRC) data = data.filter(d => d.n >= nminRC);
+      else data = data.map(d => d.n < nminRC ? { ...d, eng:null, ago:null } : d);
+    }
     if (!data.length) { alert('No hay datos para generar el gráfico.'); return; }
 
     if (sortRC==='default') data.sort((a,b)=>b.criticidad-a.criticidad);
@@ -7231,6 +7257,12 @@ function rcpGenerate() {
 
     const optimoRows  = baseRows.filter(r => parseFloat(r[engIdx])>=p75e && parseFloat(r[agoIdx])<=p25a);
     const criticoRows = baseRows.filter(r => parseFloat(r[engIdx])<=p25e && parseFloat(r[agoIdx])>=p75a);
+
+    const nminOC = parseInt(rcpGetParam('nmin')) || 0;
+    if (nminOC > 0 && (optimoRows.length < nminOC || criticoRows.length < nminOC)) {
+      alert(`Confidencial: el grupo Óptimo (N=${optimoRows.length}) o Crítico (N=${criticoRows.length}) está bajo el N mínimo definido (${nminOC}). Ajusta el filtro o el N mínimo.`);
+      return;
+    }
 
     // Same dimension set and order as Recursos y Demandas
     const OC_ORDER = [
