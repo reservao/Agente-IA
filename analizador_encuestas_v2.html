@@ -4339,8 +4339,10 @@ function rProcess(wb, filename) {
 
     // Is it explicitly a classification column?
     const isClaExact = CLA_EXACT.some(c => rNorm(c) === nh || c === h);
-    const isClaPattern = /^(cla|clasificacion)\s*\d+/i.test(h) ||
-                         /^(division|gerencia|area|departamento|perfil|nivel|cargo)/i.test(h);
+    // Usa nh (normalizado, sin tildes) para no perder columnas como "CLASIFICACIÓN3"/"CLASIFICACIÓN6"
+    // que vienen con acento en algunas bases, a diferencia de "CLASIFICACION1" sin acento.
+    const isClaPattern = /^(cla|clasificacion)\s*\d+/i.test(nh) ||
+                         /^(division|gerencia|area|departamento|perfil|nivel|cargo)/i.test(nh);
     const isCla = (isClaExact || isClaPattern) && isCateg && hasText;
 
     // Is it a demographic column?
